@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3 uid="uid://spiketrap3d001"]
+
+[ext_resource type="Script" path="res://scenes/world/spike_trap_3d.gd" id="1_script"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_spike"]
+size = Vector3(2.1, 0.9, 2.1)
+
+[node name="SpikeTrap3D" type="Area3D"]
+collision_layer = 16
+collision_mask = 2
+script = ExtResource("1_script")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, 0)
+shape = SubResource("BoxShape3D_spike")
