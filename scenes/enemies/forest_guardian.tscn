@@ -1,0 +1,98 @@
+[gd_scene load_steps=15 format=3 uid="uid://guardian001"]
+
+[ext_resource type="Script" path="res://scenes/enemies/forest_guardian.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/guardian_sheet.png" id="2_diff"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/guardian_sheet_n.png" id="3_norm"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/boss_cast.wav" id="4_cast"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/boss_roar.wav" id="5_roar"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/hurt.wav" id="6_hit"]
+
+[sub_resource type="CanvasTexture" id="CanvasTexture_guardian"]
+diffuse_texture = ExtResource("2_diff")
+normal_texture = ExtResource("3_norm")
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_g1"]
+atlas = SubResource("CanvasTexture_guardian")
+region = Rect2(0, 0, 224, 240)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_g2"]
+atlas = SubResource("CanvasTexture_guardian")
+region = Rect2(224, 0, 224, 240)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_guardian"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_g1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_g2")
+}],
+"loop": true,
+"name": &"hover",
+"speed": 4.0
+}]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_boss"]
+size = Vector2(124, 168)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_bosshit"]
+size = Vector2(140, 180)
+
+[sub_resource type="Gradient" id="Gradient_guardian"]
+colors = PackedColorArray(1, 1, 1, 0.92, 1, 1, 1, 0.32, 1, 1, 1, 0)
+offsets = PackedFloat32Array(0, 0.5, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_guardian"]
+gradient = SubResource("Gradient_guardian")
+width = 768
+height = 768
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(0.5, 0)
+
+[node name="ForestGuardian" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+script = ExtResource("1_script")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(1.05, 1.05)
+sprite_frames = SubResource("SpriteFrames_guardian")
+animation = &"hover"
+autoplay = &"hover"
+
+[node name="BodyCollider" type="CollisionShape2D" parent="."]
+position = Vector2(0, 12)
+shape = SubResource("RectangleShape2D_boss")
+
+[node name="ContactHitBox" type="Area2D" parent="."]
+collision_layer = 16
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
+position = Vector2(0, 12)
+shape = SubResource("RectangleShape2D_bosshit")
+
+[node name="AuraLight" type="PointLight2D" parent="."]
+color = Color(0.48, 1, 0.55, 1)
+energy = 1.05
+texture = SubResource("GradientTexture2D_guardian")
+
+[node name="AttackTimer" type="Timer" parent="."]
+wait_time = 2.2
+autostart = true
+
+[node name="Audio" type="Node" parent="."]
+
+[node name="Cast" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("4_cast")
+bus = &"SFX"
+
+[node name="Roar" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("5_roar")
+bus = &"SFX"
+
+[node name="Hit" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("6_hit")
+bus = &"SFX"

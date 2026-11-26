@@ -1,0 +1,50 @@
+[gd_scene load_steps=7 format=3 uid="uid://healorb3d001"]
+
+[ext_resource type="Script" path="res://scenes/world/healing_orb_3d.gd" id="1_script"]
+[ext_resource type="Material" path="res://resources/crystal_burst_3d_material.tres" id="2_mat"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/crystal.wav" id="3_sfx"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_heal"]
+albedo_color = Color(0.4, 1, 0.62, 1)
+emission_enabled = true
+emission = Color(0.28, 0.96, 0.55, 1)
+emission_energy_multiplier = 2.6
+
+[sub_resource type="SphereMesh" id="Mesh_orb"]
+radius = 0.32
+height = 0.64
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_heal"]
+radius = 0.72
+
+[node name="HealingOrb3D" type="Area3D"]
+collision_layer = 32
+collision_mask = 2
+script = ExtResource("1_script")
+
+[node name="VisualPivot" type="Node3D" parent="."]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="VisualPivot"]
+material_override = SubResource("Mat_heal")
+mesh = SubResource("Mesh_orb")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape3D_heal")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="."]
+light_color = Color(0.38, 1, 0.6, 1)
+light_energy = 1.9
+omni_range = 6.5
+
+[node name="GPUParticles3D" type="GPUParticles3D" parent="."]
+emitting = false
+amount = 14
+lifetime = 0.45
+one_shot = true
+explosiveness = 1.0
+process_material = ExtResource("2_mat")
+draw_pass_1 = SubResource("Mesh_orb")
+
+[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("3_sfx")
+bus = &"SFX"

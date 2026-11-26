@@ -1,0 +1,61 @@
+[gd_scene load_steps=7 format=3 uid="uid://crystal3d001"]
+
+[ext_resource type="Script" path="res://scenes/world/crystal_3d.gd" id="1_script"]
+[ext_resource type="Material" path="res://resources/crystal_burst_3d_material.tres" id="2_mat"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/crystal.wav" id="3_sfx"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_crystal"]
+transparency = 1
+albedo_color = Color(0.32, 0.88, 1, 0.9)
+metallic = 0.25
+roughness = 0.12
+emission_enabled = true
+emission = Color(0.18, 0.82, 1, 1)
+emission_energy_multiplier = 2.2
+
+[sub_resource type="CylinderMesh" id="Mesh_shard"]
+top_radius = 0.01
+bottom_radius = 0.24
+height = 0.55
+radial_segments = 6
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_crystal"]
+radius = 0.72
+
+[node name="Crystal3D" type="Area3D"]
+collision_layer = 32
+collision_mask = 2
+script = ExtResource("1_script")
+
+[node name="VisualPivot" type="Node3D" parent="."]
+
+[node name="TopPoint" type="MeshInstance3D" parent="VisualPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.275, 0)
+material_override = SubResource("Mat_crystal")
+mesh = SubResource("Mesh_shard")
+
+[node name="BottomPoint" type="MeshInstance3D" parent="VisualPivot"]
+transform = Transform3D(1, 0, 0, 0, -1, 0, 0, 0, 1, 0, -0.275, 0)
+material_override = SubResource("Mat_crystal")
+mesh = SubResource("Mesh_shard")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape3D_crystal")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="."]
+light_color = Color(0.35, 0.92, 1, 1)
+light_energy = 1.65
+omni_range = 6.0
+
+[node name="GPUParticles3D" type="GPUParticles3D" parent="."]
+emitting = false
+amount = 14
+lifetime = 0.45
+one_shot = true
+explosiveness = 1.0
+process_material = ExtResource("2_mat")
+draw_pass_1 = SubResource("Mesh_shard")
+
+[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("3_sfx")
+bus = &"SFX"

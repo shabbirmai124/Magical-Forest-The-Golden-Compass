@@ -1,0 +1,111 @@
+[gd_scene load_steps=16 format=3 uid="uid://level4_3d_001"]
+
+[ext_resource type="Script" path="res://scenes/levels/level_builder_3d.gd" id="1_builder"]
+[ext_resource type="Environment" path="res://resources/world_environment_3d.tres" id="2_env"]
+[ext_resource type="PackedScene" path="res://scenes/player/player_3d.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="4_hud"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/forest_guardian_3d.tscn" id="5_guardian"]
+[ext_resource type="PackedScene" path="res://scenes/world/kill_zone_3d.tscn" id="6_kill"]
+[ext_resource type="Material" path="res://resources/firefly_3d_material.tres" id="7_firemat"]
+[ext_resource type="AudioStream" path="res://assets/audio/music/boss_theme.wav" id="8_music"]
+[ext_resource type="AudioStream" path="res://assets/audio/ambience/forest_ambience.wav" id="9_amb"]
+[ext_resource type="Material" path="res://resources/materials3d/ancient_stone.tres" id="10_stone"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_firefly"]
+albedo_color = Color(0.75, 0.96, 1, 1)
+emission_enabled = true
+emission = Color(0.55, 0.94, 1, 1)
+emission_energy_multiplier = 3.8
+
+[sub_resource type="SphereMesh" id="Mesh_firefly"]
+material = SubResource("Mat_firefly")
+radius = 0.065
+height = 0.13
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_spawn"]
+size = Vector3(28, 5, 24)
+
+[sub_resource type="BoxMesh" id="Mesh_fallback_road"]
+size = Vector3(18, 1, 225)
+
+[sub_resource type="BoxShape3D" id="Shape_fallback_road"]
+size = Vector3(18, 1, 225)
+
+[node name="Level4Astral_3D" type="Node3D"]
+script = ExtResource("1_builder")
+layout_id = "level_4"
+level_title = "Stage 4 — Celestial Cloudway Sanctuary"
+level_index = 3
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("2_env")
+
+[node name="MoonLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.35, 0.35, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 40, -90)
+light_color = Color(0.74, 0.86, 1, 1)
+light_energy = 1.35
+shadow_enabled = true
+directional_shadow_max_distance = 210.0
+
+[node name="WorldGeometry" type="Node3D" parent="."]
+
+[node name="Fireflies" type="GPUParticles3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -12)
+amount = 150
+lifetime = 4.5
+process_material = ExtResource("7_firemat")
+draw_pass_1 = SubResource("Mesh_firefly")
+
+[node name="Wayshrines" type="Node3D" parent="."]
+
+[node name="CompassPedestal" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, -4885)
+
+[node name="HiddenPaths" type="Node3D" parent="."]
+
+[node name="Hazards" type="Node3D" parent="."]
+
+[node name="Collectibles" type="Node3D" parent="."]
+
+[node name="Enemies" type="Node3D" parent="."]
+
+[node name="AstralGuardian" parent="Enemies" instance=ExtResource("5_guardian")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.0, -4893)
+max_hp = 14
+compass_spawn_marker = NodePath("../../CompassPedestal")
+
+[node name="KillZone3D" parent="." instance=ExtResource("6_kill")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -24, -2450)
+
+[node name="SpawnFloorCollider" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2.5, 6)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="SpawnFloorCollider"]
+shape = SubResource("BoxShape3D_spawn")
+
+[node name="FallbackRoad" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.52, -2450)
+collision_layer = 1
+collision_mask = 0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="FallbackRoad"]
+material_override = ExtResource("10_stone")
+mesh = SubResource("Mesh_fallback_road")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="FallbackRoad"]
+shape = SubResource("Shape_fallback_road")
+
+[node name="Player3D" parent="." instance=ExtResource("3_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 8)
+
+[node name="HUD" parent="." instance=ExtResource("4_hud")]
+
+[node name="MusicPlayer" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("8_music")
+bus = &"Music"
+
+[node name="AmbiencePlayer" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("9_amb")
+bus = &"Ambience"

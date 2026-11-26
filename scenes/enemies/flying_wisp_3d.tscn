@@ -1,0 +1,110 @@
+[gd_scene load_steps=13 format=3 uid="uid://wisp3d001"]
+
+[ext_resource type="Script" path="res://scenes/enemies/flying_wisp_3d.gd" id="1_script"]
+[ext_resource type="Material" path="res://resources/crystal_burst_3d_material.tres" id="2_mat"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/hurt.wav" id="3_sfx"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_wisp_core"]
+albedo_color = Color(0.5, 0.98, 0.95, 1)
+emission_enabled = true
+emission = Color(0.28, 0.95, 0.9, 1)
+emission_energy_multiplier = 2.6
+
+[sub_resource type="StandardMaterial3D" id="Mat_wisp_aura"]
+transparency = 1
+albedo_color = Color(0.2, 0.85, 0.88, 0.36)
+emission_enabled = true
+emission = Color(0.15, 0.8, 0.88, 1)
+emission_energy_multiplier = 1.2
+
+[sub_resource type="StandardMaterial3D" id="Mat_wisp_eye"]
+albedo_color = Color(1, 1, 0.9, 1)
+emission_enabled = true
+emission = Color(0.95, 1, 0.88, 1)
+emission_energy_multiplier = 3.2
+
+[sub_resource type="SphereMesh" id="Mesh_core"]
+radius = 0.34
+height = 0.68
+
+[sub_resource type="SphereMesh" id="Mesh_aura"]
+radius = 0.56
+height = 1.12
+
+[sub_resource type="TorusMesh" id="Mesh_ring"]
+inner_radius = 0.58
+outer_radius = 0.68
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_body"]
+radius = 0.66
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_hit"]
+radius = 0.58
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_detect"]
+radius = 15.0
+
+[node name="FlyingWisp3D" type="CharacterBody3D"]
+collision_layer = 4
+collision_mask = 1
+script = ExtResource("1_script")
+
+[node name="Visuals" type="Node3D" parent="."]
+
+[node name="CoreMesh" type="MeshInstance3D" parent="Visuals"]
+material_override = SubResource("Mat_wisp_core")
+mesh = SubResource("Mesh_core")
+
+[node name="AuraMesh" type="MeshInstance3D" parent="Visuals"]
+material_override = SubResource("Mat_wisp_aura")
+mesh = SubResource("Mesh_aura")
+
+[node name="OrbitRing" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 0.866, -0.5, 0, 0.5, 0.866, 0, 0, 0)
+material_override = SubResource("Mat_wisp_aura")
+mesh = SubResource("Mesh_ring")
+
+[node name="EyeLeft" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(0.18, 0, 0, 0, 0.14, 0, 0, 0, 0.14, -0.14, 0.04, -0.3)
+material_override = SubResource("Mat_wisp_eye")
+mesh = SubResource("Mesh_core")
+
+[node name="EyeRight" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(0.18, 0, 0, 0, 0.14, 0, 0, 0, 0.14, 0.14, 0.04, -0.3)
+material_override = SubResource("Mat_wisp_eye")
+mesh = SubResource("Mesh_core")
+
+[node name="BodyCollider" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape3D_body")
+
+[node name="ContactHitBox" type="Area3D" parent="."]
+collision_layer = 16
+collision_mask = 2
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="ContactHitBox"]
+shape = SubResource("SphereShape3D_hit")
+
+[node name="DetectZone" type="Area3D" parent="."]
+collision_layer = 32
+collision_mask = 2
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="DetectZone"]
+shape = SubResource("SphereShape3D_detect")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="."]
+light_color = Color(0.35, 0.96, 0.9, 1)
+light_energy = 1.6
+omni_range = 7.0
+
+[node name="DefeatParticles" type="GPUParticles3D" parent="."]
+emitting = false
+amount = 18
+lifetime = 0.45
+one_shot = true
+explosiveness = 1.0
+process_material = ExtResource("2_mat")
+draw_pass_1 = SubResource("Mesh_core")
+
+[node name="HitSFX" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("3_sfx")
+bus = &"SFX"

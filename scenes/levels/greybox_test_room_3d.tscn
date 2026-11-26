@@ -1,0 +1,123 @@
+[gd_scene load_steps=19 format=3 uid="uid://greybox3d001"]
+
+[ext_resource type="Script" path="res://scenes/levels/level_builder_3d.gd" id="1_builder"]
+[ext_resource type="Environment" path="res://resources/world_environment_3d.tres" id="2_env"]
+[ext_resource type="PackedScene" path="res://scenes/player/player_3d.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="4_hud"]
+[ext_resource type="PackedScene" path="res://scenes/world/crystal_3d.tscn" id="5_crystal"]
+[ext_resource type="PackedScene" path="res://scenes/world/healing_orb_3d.tscn" id="6_heal"]
+[ext_resource type="PackedScene" path="res://scenes/world/spike_trap_3d.tscn" id="7_spike"]
+[ext_resource type="PackedScene" path="res://scenes/world/timed_thorn_trap_3d.tscn" id="8_thorn"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/flying_wisp_3d.tscn" id="9_wisp"]
+[ext_resource type="PackedScene" path="res://scenes/world/hidden_path_3d.tscn" id="10_hidden"]
+[ext_resource type="PackedScene" path="res://scenes/world/kill_zone_3d.tscn" id="11_kill"]
+[ext_resource type="Material" path="res://resources/firefly_3d_material.tres" id="12_firemat"]
+[ext_resource type="PackedScene" path="res://scenes/world/wayshrine_3d.tscn" id="13_wayshrine"]
+[ext_resource type="Material" path="res://resources/materials3d/ancient_stone.tres" id="14_stone"]
+
+[sub_resource type="SphereMesh" id="Mesh_firefly"]
+radius = 0.06
+height = 0.12
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_spawn"]
+size = Vector3(46, 5, 34)
+
+[sub_resource type="BoxMesh" id="Mesh_fallback_road"]
+size = Vector3(16, 1, 70)
+
+[sub_resource type="BoxShape3D" id="Shape_fallback_road"]
+size = Vector3(16, 1, 70)
+
+[node name="GreyboxTestRoom3D" type="Node3D"]
+script = ExtResource("1_builder")
+layout_id = "greybox"
+level_title = "3D Road Test Clearing"
+level_index = -1
+show_controls_hint = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("2_env")
+
+[node name="MoonLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.35, 0.35, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 28, 0)
+light_color = Color(0.68, 0.84, 1, 1)
+light_energy = 1.15
+shadow_enabled = true
+directional_shadow_max_distance = 120.0
+
+[node name="WorldGeometry" type="Node3D" parent="."]
+
+[node name="Fireflies" type="GPUParticles3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, -16)
+amount = 64
+lifetime = 4.5
+process_material = ExtResource("12_firemat")
+draw_pass_1 = SubResource("Mesh_firefly")
+
+[node name="Wayshrines" type="Node3D" parent="."]
+
+[node name="WayshrineTest" parent="Wayshrines" instance=ExtResource("13_wayshrine")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -28)
+
+[node name="HiddenPaths" type="Node3D" parent="."]
+
+[node name="HiddenTest" parent="HiddenPaths" instance=ExtResource("10_hidden")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0, -16)
+
+[node name="Hazards" type="Node3D" parent="."]
+
+[node name="SpikeTest" parent="Hazards" instance=ExtResource("7_spike")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0, -6)
+
+[node name="TimedThornTest" parent="Hazards" instance=ExtResource("8_thorn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, -6)
+
+[node name="Collectibles" type="Node3D" parent="."]
+
+[node name="Crystal1" parent="Collectibles" instance=ExtResource("5_crystal")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, -2)
+
+[node name="Crystal2" parent="Collectibles" instance=ExtResource("5_crystal")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, -12)
+
+[node name="HealOrb" parent="Collectibles" instance=ExtResource("6_heal")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 1.1, -16)
+
+[node name="Enemies" type="Node3D" parent="."]
+
+[node name="WispTest" parent="Enemies" instance=ExtResource("9_wisp")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, -20)
+
+[node name="KillZone3D" parent="." instance=ExtResource("11_kill")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -24, -16)
+
+[node name="SpawnFloorCollider" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2.5, -8)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="SpawnFloorCollider"]
+shape = SubResource("BoxShape3D_spawn")
+
+[node name="FallbackRoad" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.52, -16)
+collision_layer = 1
+collision_mask = 0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="FallbackRoad"]
+material_override = ExtResource("14_stone")
+mesh = SubResource("Mesh_fallback_road")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="FallbackRoad"]
+shape = SubResource("Shape_fallback_road")
+
+[node name="Player3D" parent="." instance=ExtResource("3_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 6)
+
+[node name="HUD" parent="." instance=ExtResource("4_hud")]
+
+[node name="MusicPlayer" type="AudioStreamPlayer" parent="."]
+bus = &"Music"
+
+[node name="AmbiencePlayer" type="AudioStreamPlayer" parent="."]
+bus = &"Ambience"

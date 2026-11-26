@@ -1,0 +1,44 @@
+[gd_scene load_steps=6 format=3 uid="uid://hidden3d001"]
+
+[ext_resource type="Script" path="res://scenes/world/hidden_path_3d.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/textures3d/foliage_canopy_albedo.png" id="2_alb"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_foliage_veil"]
+resource_local_to_scene = true
+transparency = 1
+albedo_color = Color(1, 1, 1, 1)
+albedo_texture = ExtResource("2_alb")
+roughness = 0.85
+
+[sub_resource type="SphereMesh" id="Mesh_bush"]
+radius = 1.65
+height = 2.8
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_zone"]
+size = Vector3(6.5, 4.2, 6.5)
+
+[node name="HiddenPath3D" type="Area3D"]
+collision_layer = 32
+collision_mask = 2
+script = ExtResource("1_script")
+
+[node name="CoverGroup" type="Node3D" parent="."]
+
+[node name="Bush1" type="MeshInstance3D" parent="CoverGroup"]
+transform = Transform3D(1.1, 0, 0, 0, 1.1, 0, 0, 0, 1, -1.3, 1.2, 0.4)
+material_override = SubResource("Mat_foliage_veil")
+mesh = SubResource("Mesh_bush")
+
+[node name="Bush2" type="MeshInstance3D" parent="CoverGroup"]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.1, 0.2, 1.4, -0.3)
+material_override = SubResource("Mat_foliage_veil")
+mesh = SubResource("Mesh_bush")
+
+[node name="Bush3" type="MeshInstance3D" parent="CoverGroup"]
+transform = Transform3D(1.05, 0, 0, 0, 1.05, 0, 0, 0, 1, 1.5, 1.15, 0.3)
+material_override = SubResource("Mat_foliage_veil")
+mesh = SubResource("Mesh_bush")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+shape = SubResource("BoxShape3D_zone")

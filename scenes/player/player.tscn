@@ -1,0 +1,197 @@
+[gd_scene load_steps=24 format=3 uid="uid://player001"]
+
+[ext_resource type="Script" path="res://scenes/player/player.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/sprites/player/explorer_sheet.png" id="2_diff"]
+[ext_resource type="Texture2D" path="res://assets/sprites/player/explorer_sheet_n.png" id="3_norm"]
+[ext_resource type="Material" path="res://resources/dust_material.tres" id="4_dust"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/jump.wav" id="5_jump"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/land.wav" id="6_land"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/attack.wav" id="7_atk"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/hurt.wav" id="8_hurt"]
+[ext_resource type="Texture2D" path="res://assets/sprites/vfx/slash_arc.png" id="9_slash"]
+[ext_resource type="Texture2D" path="res://assets/sprites/vfx/dust_particle.png" id="10_dusttex"]
+
+[sub_resource type="CanvasTexture" id="CanvasTexture_player"]
+diffuse_texture = ExtResource("2_diff")
+normal_texture = ExtResource("3_norm")
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle"]
+atlas = SubResource("CanvasTexture_player")
+region = Rect2(0, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run1"]
+atlas = SubResource("CanvasTexture_player")
+region = Rect2(128, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run2"]
+atlas = SubResource("CanvasTexture_player")
+region = Rect2(256, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_jump"]
+atlas = SubResource("CanvasTexture_player")
+region = Rect2(384, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_fall"]
+atlas = SubResource("CanvasTexture_player")
+region = Rect2(512, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack"]
+atlas = SubResource("CanvasTexture_player")
+region = Rect2(640, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hurt"]
+atlas = SubResource("CanvasTexture_player")
+region = Rect2(768, 0, 128, 128)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_player"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack")
+}],
+"loop": false,
+"name": &"attack",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_fall")
+}],
+"loop": true,
+"name": &"fall",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_hurt")
+}],
+"loop": false,
+"name": &"hurt",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_jump")
+}],
+"loop": true,
+"name": &"jump",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run2")
+}],
+"loop": true,
+"name": &"run",
+"speed": 9.0
+}]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(40, 80)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_attack"]
+size = Vector2(88, 64)
+
+[sub_resource type="Gradient" id="Gradient_lantern"]
+colors = PackedColorArray(1, 1, 1, 0.92, 1, 1, 1, 0.28, 1, 1, 1, 0)
+offsets = PackedFloat32Array(0, 0.45, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_lantern"]
+gradient = SubResource("Gradient_lantern")
+width = 640
+height = 640
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(0.5, 0)
+
+[node name="Player" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 1
+floor_snap_length = 16.0
+script = ExtResource("1_script")
+
+[node name="Visuals" type="Node2D" parent="."]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="Visuals"]
+position = Vector2(0, -4)
+scale = Vector2(1.12, 1.12)
+sprite_frames = SubResource("SpriteFrames_player")
+animation = &"idle"
+autoplay = &"idle"
+
+[node name="BodyCollider" type="CollisionShape2D" parent="."]
+position = Vector2(0, 4)
+shape = SubResource("RectangleShape2D_body")
+
+[node name="AttackPivot" type="Node2D" parent="."]
+
+[node name="AttackArea" type="Area2D" parent="AttackPivot"]
+collision_layer = 8
+collision_mask = 4
+monitoring = false
+
+[node name="AttackCollider" type="CollisionShape2D" parent="AttackPivot/AttackArea"]
+position = Vector2(56, 0)
+shape = SubResource("RectangleShape2D_attack")
+
+[node name="SlashArc" type="Sprite2D" parent="AttackPivot"]
+visible = false
+modulate = Color(1.25, 1.45, 1.55, 0.9)
+position = Vector2(62, 0)
+scale = Vector2(0.88, 0.88)
+texture = ExtResource("9_slash")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position_smoothing_enabled = true
+position_smoothing_speed = 7.0
+drag_horizontal_enabled = true
+drag_vertical_enabled = true
+drag_left_margin = 0.08
+drag_right_margin = 0.08
+drag_top_margin = 0.25
+drag_bottom_margin = 0.12
+
+[node name="LanternLight" type="PointLight2D" parent="."]
+color = Color(1, 0.86, 0.62, 1)
+energy = 0.95
+shadow_enabled = true
+shadow_filter = 1
+texture = SubResource("GradientTexture2D_lantern")
+
+[node name="FootstepDust" type="GPUParticles2D" parent="."]
+position = Vector2(0, 44)
+emitting = false
+amount = 8
+texture = ExtResource("10_dusttex")
+process_material = ExtResource("4_dust")
+lifetime = 0.32
+one_shot = true
+
+[node name="Audio" type="Node" parent="."]
+
+[node name="Jump" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("5_jump")
+bus = &"SFX"
+
+[node name="Land" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("6_land")
+bus = &"SFX"
+
+[node name="AttackSwing" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("7_atk")
+bus = &"SFX"
+
+[node name="Hurt" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("8_hurt")
+bus = &"SFX"

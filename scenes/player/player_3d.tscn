@@ -1,0 +1,440 @@
+[gd_scene load_steps=46 format=3 uid="uid://player3d001"]
+
+[ext_resource type="Script" path="res://scenes/player/player_3d.gd" id="1_script"]
+[ext_resource type="Material" path="res://resources/dust_3d_material.tres" id="2_dustmat"]
+[ext_resource type="Material" path="res://resources/crystal_burst_3d_material.tres" id="3_sparkmat"]
+[ext_resource type="Material" path="res://resources/materials3d/char_cloak.tres" id="4_cloak"]
+[ext_resource type="Material" path="res://resources/materials3d/char_leather.tres" id="5_leather"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/jump.wav" id="6_jump"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/land.wav" id="7_land"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/attack.wav" id="8_atk"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/hurt.wav" id="9_hurt"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/footstep_moss.wav" id="10_step"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/dash_whoosh.wav" id="11_dash"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
+radius = 0.38
+height = 1.75
+
+[sub_resource type="StandardMaterial3D" id="Mat_scarf"]
+albedo_color = Color(0.76, 0.56, 0.2, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="Mat_gold"]
+albedo_color = Color(0.92, 0.74, 0.28, 1)
+metallic = 0.88
+roughness = 0.24
+
+[sub_resource type="StandardMaterial3D" id="Mat_iron"]
+albedo_color = Color(0.18, 0.2, 0.24, 1)
+metallic = 0.78
+roughness = 0.42
+
+[sub_resource type="StandardMaterial3D" id="Mat_skin"]
+albedo_color = Color(0.9, 0.72, 0.58, 1)
+roughness = 0.65
+
+[sub_resource type="StandardMaterial3D" id="Mat_hair"]
+albedo_color = Color(0.28, 0.16, 0.09, 1)
+roughness = 0.78
+
+[sub_resource type="StandardMaterial3D" id="Mat_eye"]
+albedo_color = Color(0.1, 0.14, 0.16, 1)
+roughness = 0.2
+
+[sub_resource type="StandardMaterial3D" id="Mat_trousers"]
+albedo_color = Color(0.18, 0.17, 0.16, 1)
+roughness = 0.88
+
+[sub_resource type="StandardMaterial3D" id="Mat_lantern_glow"]
+albedo_color = Color(1, 0.9, 0.52, 1)
+emission_enabled = true
+emission = Color(1, 0.78, 0.32, 1)
+emission_energy_multiplier = 3.2
+
+[sub_resource type="StandardMaterial3D" id="Mat_blade"]
+albedo_color = Color(0.84, 0.95, 1, 1)
+metallic = 0.9
+roughness = 0.16
+emission_enabled = true
+emission = Color(0.35, 0.82, 1, 1)
+emission_energy_multiplier = 0.75
+
+[sub_resource type="StandardMaterial3D" id="Mat_slash"]
+transparency = 1
+cull_mode = 2
+albedo_color = Color(0.55, 0.96, 1, 0.82)
+emission_enabled = true
+emission = Color(0.45, 0.94, 1, 1)
+emission_energy_multiplier = 2.6
+
+[sub_resource type="StandardMaterial3D" id="Mat_dust"]
+vertex_color_use_as_albedo = true
+albedo_color = Color(0.75, 0.82, 0.7, 0.85)
+roughness = 0.95
+
+[sub_resource type="CapsuleMesh" id="Mesh_torso"]
+radius = 0.26
+height = 0.8
+
+[sub_resource type="BoxMesh" id="Mesh_vest"]
+size = Vector3(0.5, 0.54, 0.4)
+
+[sub_resource type="BoxMesh" id="Mesh_belt"]
+size = Vector3(0.56, 0.11, 0.44)
+
+[sub_resource type="BoxMesh" id="Mesh_pouch"]
+size = Vector3(0.12, 0.18, 0.16)
+
+[sub_resource type="BoxMesh" id="Mesh_satchel"]
+size = Vector3(0.38, 0.44, 0.22)
+
+[sub_resource type="CylinderMesh" id="Mesh_bedroll"]
+top_radius = 0.1
+bottom_radius = 0.1
+height = 0.46
+
+[sub_resource type="SphereMesh" id="Mesh_pauldron"]
+radius = 0.17
+height = 0.22
+
+[sub_resource type="BoxMesh" id="Mesh_cloak_center"]
+size = Vector3(0.52, 0.96, 0.06)
+
+[sub_resource type="BoxMesh" id="Mesh_cloak_side"]
+size = Vector3(0.24, 0.88, 0.05)
+
+[sub_resource type="SphereMesh" id="Mesh_head"]
+radius = 0.21
+height = 0.42
+
+[sub_resource type="CylinderMesh" id="Mesh_hood"]
+top_radius = 0.03
+bottom_radius = 0.29
+height = 0.44
+
+[sub_resource type="TorusMesh" id="Mesh_scarf"]
+inner_radius = 0.17
+outer_radius = 0.3
+
+[sub_resource type="CapsuleMesh" id="Mesh_leg"]
+radius = 0.1
+height = 0.44
+
+[sub_resource type="BoxMesh" id="Mesh_boot"]
+size = Vector3(0.18, 0.24, 0.28)
+
+[sub_resource type="CapsuleMesh" id="Mesh_arm"]
+radius = 0.085
+height = 0.42
+
+[sub_resource type="CylinderMesh" id="Mesh_lantern_cap"]
+top_radius = 0.05
+bottom_radius = 0.13
+height = 0.1
+
+[sub_resource type="CylinderMesh" id="Mesh_lantern_core"]
+top_radius = 0.08
+bottom_radius = 0.08
+height = 0.18
+
+[sub_resource type="BoxMesh" id="Mesh_blade"]
+size = Vector3(0.05, 0.09, 0.98)
+
+[sub_resource type="TorusMesh" id="Mesh_slash"]
+inner_radius = 1.05
+outer_radius = 1.62
+rings = 24
+ring_segments = 12
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_attack"]
+size = Vector3(3.2, 3.4, 3.4)
+
+[sub_resource type="SphereMesh" id="Mesh_dust"]
+material = SubResource("Mat_dust")
+radius = 0.12
+height = 0.24
+
+[sub_resource type="SphereMesh" id="Mesh_spark"]
+material = SubResource("Mat_slash")
+radius = 0.08
+height = 0.16
+
+[node name="Player3D" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 1
+floor_snap_length = 0.55
+floor_max_angle = 0.837758
+script = ExtResource("1_script")
+
+[node name="BodyCollider" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("CapsuleShape3D_body")
+
+[node name="VisualRig" type="Node3D" parent="."]
+
+[node name="BodyPivot" type="Node3D" parent="VisualRig"]
+
+[node name="Torso" type="MeshInstance3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.78, 0, 0.98, 0)
+material_override = ExtResource("4_cloak")
+mesh = SubResource("Mesh_torso")
+
+[node name="LeatherVest" type="MeshInstance3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.02, 0)
+material_override = ExtResource("5_leather")
+mesh = SubResource("Mesh_vest")
+
+[node name="BaldricStrap" type="MeshInstance3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(0.58, 0.52, 0, -0.52, 0.58, 0, 0, 0, 0.82, 0, 1.16, 0)
+material_override = ExtResource("5_leather")
+mesh = SubResource("Mesh_belt")
+
+[node name="Belt" type="MeshInstance3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(0.74, 0, 0, 0, 0.95, 0, 0, 0, 0.78, 0, 0.9, 0)
+material_override = ExtResource("5_leather")
+mesh = SubResource("Mesh_belt")
+
+[node name="Buckle" type="MeshInstance3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(0.18, 0, 0, 0, 0.95, 0, 0, 0, 0.1, 0, 0.9, -0.175)
+material_override = SubResource("Mat_gold")
+mesh = SubResource("Mesh_belt")
+
+[node name="PouchLeft" type="MeshInstance3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(0.85, 0, 0, 0, 0.85, 0, 0, 0, 0.85, -0.22, 0.84, 0.02)
+material_override = ExtResource("5_leather")
+mesh = SubResource("Mesh_pouch")
+
+[node name="PouchRight" type="MeshInstance3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(0.85, 0, 0, 0, 0.85, 0, 0, 0, 0.85, 0.22, 0.84, 0.02)
+material_override = ExtResource("5_leather")
+mesh = SubResource("Mesh_pouch")
+
+[node name="Satchel" type="MeshInstance3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(0.76, 0, 0, 0, 0.82, 0, 0, 0, 0.72, 0, 1.12, 0.19)
+material_override = ExtResource("5_leather")
+mesh = SubResource("Mesh_satchel")
+
+[node name="Bedroll" type="MeshInstance3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(0, 0.78, 0, -0.78, 0, 0, 0, 0, 0.78, 0, 1.34, 0.21)
+material_override = SubResource("Mat_scarf")
+mesh = SubResource("Mesh_bedroll")
+
+[node name="PauldronLeft" type="MeshInstance3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(0.76, 0, 0, 0, 0.74, 0, 0, 0, 0.84, -0.25, 1.38, 0)
+material_override = ExtResource("5_leather")
+mesh = SubResource("Mesh_pauldron")
+
+[node name="PauldronRight" type="MeshInstance3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(0.76, 0, 0, 0, 0.74, 0, 0, 0, 0.84, 0.25, 1.38, 0)
+material_override = ExtResource("5_leather")
+mesh = SubResource("Mesh_pauldron")
+
+[node name="ScarfCollar" type="MeshInstance3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(0.74, 0, 0, 0, 0.85, 0, 0, 0, 0.74, 0, 1.44, 0)
+material_override = SubResource("Mat_scarf")
+mesh = SubResource("Mesh_scarf")
+
+[node name="CloakPivot" type="Node3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(1, 0, 0, 0, 0.96, -0.28, 0, 0.28, 0.96, 0, 1.42, 0.16)
+
+[node name="CloakCenter" type="MeshInstance3D" parent="VisualRig/BodyPivot/CloakPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.46, 0.08)
+material_override = ExtResource("4_cloak")
+mesh = SubResource("Mesh_cloak_center")
+
+[node name="CloakLeft" type="MeshInstance3D" parent="VisualRig/BodyPivot/CloakPivot"]
+transform = Transform3D(0.96, 0.22, 0.16, -0.22, 0.97, 0, -0.16, -0.03, 0.98, -0.24, -0.44, 0.06)
+material_override = ExtResource("4_cloak")
+mesh = SubResource("Mesh_cloak_side")
+
+[node name="CloakRight" type="MeshInstance3D" parent="VisualRig/BodyPivot/CloakPivot"]
+transform = Transform3D(0.96, -0.22, -0.16, 0.22, 0.97, 0, 0.16, -0.03, 0.98, 0.24, -0.44, 0.06)
+material_override = ExtResource("4_cloak")
+mesh = SubResource("Mesh_cloak_side")
+
+[node name="HeadGroup" type="Node3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.62, 0)
+
+[node name="Head" type="MeshInstance3D" parent="VisualRig/BodyPivot/HeadGroup"]
+material_override = SubResource("Mat_skin")
+mesh = SubResource("Mesh_head")
+
+[node name="HairBangs" type="MeshInstance3D" parent="VisualRig/BodyPivot/HeadGroup"]
+transform = Transform3D(0.95, 0, 0, 0, 0.55, 0, 0, 0, 0.5, 0, 0.11, -0.12)
+material_override = SubResource("Mat_hair")
+mesh = SubResource("Mesh_head")
+
+[node name="EyeLeft" type="MeshInstance3D" parent="VisualRig/BodyPivot/HeadGroup"]
+transform = Transform3D(0.14, 0, 0, 0, 0.14, 0, 0, 0, 0.1, -0.075, 0.02, -0.19)
+material_override = SubResource("Mat_eye")
+mesh = SubResource("Mesh_head")
+
+[node name="EyeRight" type="MeshInstance3D" parent="VisualRig/BodyPivot/HeadGroup"]
+transform = Transform3D(0.14, 0, 0, 0, 0.14, 0, 0, 0, 0.1, 0.075, 0.02, -0.19)
+material_override = SubResource("Mat_eye")
+mesh = SubResource("Mesh_head")
+
+[node name="Nose" type="MeshInstance3D" parent="VisualRig/BodyPivot/HeadGroup"]
+transform = Transform3D(0.15, 0, 0, 0, 0.22, 0, 0, 0, 0.18, 0, -0.02, -0.21)
+material_override = SubResource("Mat_skin")
+mesh = SubResource("Mesh_head")
+
+[node name="Hood" type="MeshInstance3D" parent="VisualRig/BodyPivot/HeadGroup"]
+transform = Transform3D(1, 0, 0, 0, 0.9, 0.43, 0, -0.43, 0.9, 0, 0.12, 0.08)
+material_override = ExtResource("4_cloak")
+mesh = SubResource("Mesh_hood")
+
+[node name="LeftLegPivot" type="Node3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.125, 0.86, 0)
+
+[node name="Thigh" type="MeshInstance3D" parent="VisualRig/BodyPivot/LeftLegPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.22, 0)
+material_override = SubResource("Mat_trousers")
+mesh = SubResource("Mesh_leg")
+
+[node name="Boot" type="MeshInstance3D" parent="VisualRig/BodyPivot/LeftLegPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.41, 0)
+material_override = ExtResource("5_leather")
+mesh = SubResource("Mesh_boot")
+
+[node name="RightLegPivot" type="Node3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.125, 0.86, 0)
+
+[node name="Thigh" type="MeshInstance3D" parent="VisualRig/BodyPivot/RightLegPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.22, 0)
+material_override = SubResource("Mat_trousers")
+mesh = SubResource("Mesh_leg")
+
+[node name="Boot" type="MeshInstance3D" parent="VisualRig/BodyPivot/RightLegPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.41, 0)
+material_override = ExtResource("5_leather")
+mesh = SubResource("Mesh_boot")
+
+[node name="LeftArmPivot" type="Node3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.255, 1.36, -0.02)
+
+[node name="Arm" type="MeshInstance3D" parent="VisualRig/BodyPivot/LeftArmPivot"]
+transform = Transform3D(1, 0, 0, 0, 0.94, 0.34, 0, -0.34, 0.94, 0, -0.16, -0.05)
+material_override = ExtResource("4_cloak")
+mesh = SubResource("Mesh_arm")
+
+[node name="LanternTop" type="MeshInstance3D" parent="VisualRig/BodyPivot/LeftArmPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.02, -0.5, -0.24)
+material_override = SubResource("Mat_iron")
+mesh = SubResource("Mesh_lantern_cap")
+
+[node name="LanternCore" type="MeshInstance3D" parent="VisualRig/BodyPivot/LeftArmPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.02, -0.62, -0.24)
+material_override = SubResource("Mat_lantern_glow")
+mesh = SubResource("Mesh_lantern_core")
+
+[node name="LanternBase" type="MeshInstance3D" parent="VisualRig/BodyPivot/LeftArmPivot"]
+transform = Transform3D(1, 0, 0, 0, -1, 0, 0, 0, 1, -0.02, -0.73, -0.24)
+material_override = SubResource("Mat_iron")
+mesh = SubResource("Mesh_lantern_cap")
+
+[node name="LanternLight" type="OmniLight3D" parent="VisualRig/BodyPivot/LeftArmPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.02, -0.6, -0.3)
+light_color = Color(1, 0.84, 0.5, 1)
+light_energy = 2.15
+shadow_enabled = false
+omni_range = 15.0
+omni_attenuation = 1.15
+
+[node name="RightArmPivot" type="Node3D" parent="VisualRig/BodyPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.255, 1.36, -0.02)
+
+[node name="Arm" type="MeshInstance3D" parent="VisualRig/BodyPivot/RightArmPivot"]
+transform = Transform3D(1, 0, 0, 0, 0.94, 0.34, 0, -0.34, 0.94, 0, -0.16, -0.05)
+material_override = ExtResource("4_cloak")
+mesh = SubResource("Mesh_arm")
+
+[node name="Guard" type="MeshInstance3D" parent="VisualRig/BodyPivot/RightArmPivot"]
+transform = Transform3D(0.45, 0, 0, 0, 0.45, 0, 0, 0, 0.45, 0.02, -0.38, -0.22)
+material_override = SubResource("Mat_gold")
+mesh = SubResource("Mesh_belt")
+
+[node name="SwordBlade" type="MeshInstance3D" parent="VisualRig/BodyPivot/RightArmPivot"]
+transform = Transform3D(1, 0, 0, 0, 0.94, 0.34, 0, -0.34, 0.94, 0.02, -0.38, -0.22)
+material_override = SubResource("Mat_blade")
+mesh = SubResource("Mesh_blade")
+
+[node name="AttackArea" type="Area3D" parent="VisualRig"]
+collision_layer = 8
+collision_mask = 4
+monitoring = false
+
+[node name="AttackCollider" type="CollisionShape3D" parent="VisualRig/AttackArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.45, -1.65)
+shape = SubResource("BoxShape3D_attack")
+
+[node name="SlashArcMesh" type="MeshInstance3D" parent="VisualRig"]
+visible = false
+transform = Transform3D(1.18, 0, 0, 0, 0.22, 0, 0, 0, 1.18, 0, 1.05, -0.42)
+material_override = SubResource("Mat_slash")
+mesh = SubResource("Mesh_slash")
+
+[node name="HitSparks" type="GPUParticles3D" parent="VisualRig"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.05, -1.4)
+emitting = false
+amount = 16
+lifetime = 0.35
+one_shot = true
+explosiveness = 1.0
+process_material = ExtResource("3_sparkmat")
+draw_pass_1 = SubResource("Mesh_spark")
+
+[node name="CameraYaw" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.72, 0)
+
+[node name="CameraPitch" type="Node3D" parent="CameraYaw"]
+transform = Transform3D(1, 0, 0, 0, 0.951, 0.309, 0, -0.309, 0.951, 0, 0, 0)
+
+[node name="SpringArm3D" type="SpringArm3D" parent="CameraYaw/CameraPitch"]
+spring_length = 7.0
+margin = 0.45
+
+[node name="Camera3D" type="Camera3D" parent="CameraYaw/CameraPitch/SpringArm3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.36, 0.22, 0)
+current = true
+fov = 64.0
+far = 520.0
+
+[node name="FootstepDust" type="GPUParticles3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.08, 0)
+emitting = false
+amount = 10
+lifetime = 0.38
+one_shot = true
+explosiveness = 0.85
+process_material = ExtResource("2_dustmat")
+draw_pass_1 = SubResource("Mesh_dust")
+
+[node name="Audio" type="Node" parent="."]
+
+[node name="Jump" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("6_jump")
+bus = &"SFX"
+
+[node name="Land" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("7_land")
+bus = &"SFX"
+
+[node name="AttackSwing" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("8_atk")
+bus = &"SFX"
+
+[node name="Hurt" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("9_hurt")
+bus = &"SFX"
+
+[node name="Footstep" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("10_step")
+volume_db = -8.0
+bus = &"SFX"
+
+[node name="Dash" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("11_dash")
+volume_db = -2.0
+bus = &"SFX"
