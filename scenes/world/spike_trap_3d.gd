@@ -1,64 +1,102 @@
 extends Area3D
-## 3D Ancient Iron Spike Trap — static road hazard with continuous overlap check for clean i-frame cadence.
-
-const MAT_STONE: StandardMaterial3D = preload("res://resources/materials3d/ancient_stone.tres")
-const MAT_FILIGREE: StandardMaterial3D = preload("res://resources/materials3d/metal_filigree.tres")
+## Iron Spike Trap — glowing crimson danger grate, deals 1 damage + knockback,
+## highlighted by Golden Compass Pulse [G].
 
 @export var damage: int = 1
+@export var cooldown_time: float = 1.1
 
-var _overlapping_player: Node3D = null
+var _cd: float = 0.0
+var _beacon: MeshInstance3D = null
 
 
 func _ready() -> void:
+	add_to_group("trap")
+	collision_layer = 16
+	collision_mask = 2
 	body_entered.connect(_on_body_entered)
-	body_exited.connect(_on_body_exited)
-	_build_spikes()
+	_build_visuals()
 
 
-func _build_spikes() -> void:
-	var plate := MeshInstance3D.new()
-	var pm := BoxMesh.new()
-	pm.size = Vector3(2.2, 0.16, 2.2)
-	plate.mesh = pm
-	plate.position = Vector3(0.0, 0.08, 0.0)
-	plate.material_override = MAT_STONE
-	add_child(plate)
+func _build_visuals() -> void:
+	var col := get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if not col:
+		col = CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = Vector3(2.2, 0.9, 2.2)
+		col.shape = bs
+		col.position = Vector3(0.0, 0.45, 0.0)
+		add_child(col)
+
+	var base_mat := StandardMaterial3D.new()
+	base_mat.albedo_color = Color(0.22, 0.18, 0.2, 1.0)
+	base_mat.roughness = 0.72
+	base_mat.emission_enabled = true
+	base_mat.emission = Color(0.65, 0.14, 0.14, 1.0)
+	base_mat.emission_energy_multiplier = 0.65
 
 	var spike_mat := StandardMaterial3D.new()
-	spike_mat.albedo_color = Color(0.55, 0.58, 0.64, 1.0)
-	spike_mat.metallic = 0.82
-	spike_mat.roughness = 0.28
-	spike_mat.emission_enabled = true
-	spike_mat.emission = Color(0.75, 0.18, 0.14, 1.0)
-	spike_mat.emission_energy_multiplier = 0.35
+	spike_mat.albedo_color = Color(0.66, 0.7, 0.75, 1.0)
+	spike_mat.metallic = 0.8
+	spike_mat.roughness = 0.3
 
-	var spike_mesh := CylinderMesh.new()
-	spike_mesh.top_radius = 0.015
-	spike_mesh.bottom_radius = 0.13
-	spike_mesh.height = 0.78
-	spike_mesh.radial_segments = 6
+	var grate := MeshInstance3D.new()
+	var gm := BoxMesh.new()
+	gm.size = Vector3(2.2, 0.14, 2.2)
+	grate.mesh = gm
+	grate.position = Vector3(0.0, 0.07, 0.0)
+	grate.material_override = base_mat
+	add_child(grate)
 
-	for gx in [-0.65, 0.0, 0.65]:
-		for gz in [-0.65, 0.0, 0.65]:
+	for ix in [-0.65, 0.0, 0.65]:
+		for iz in [-0.65, 0.0, 0.65]:
 			var sp := MeshInstance3D.new()
-			sp.mesh = spike_mesh
-			sp.position = Vector3(gx, 0.48, gz)
+			var sm := CylinderMesh.new()
+			sm.top_radius = 0.015
+			sm.bottom_radius = 0.13
+			sm.height = 0.72
+			sm.radial_segments = 6
+			sp.mesh = sm
+			sp.position = Vector3(ix, 0.42, iz)
 			sp.material_override = spike_mat
 			add_child(sp)
 
+	_beacon = MeshInstance3D.new()
+	var ring_m := TorusMesh.new()
+	ring_m.inner_radius = 1.25
+	ring_m.outer_radius = 1.45
+	ring_m.rings = 16
+	ring_m.ring_segments = 6
+	_beacon.mesh = ring_m
+	_beacon.position = Vector3(0.0, 0.25, 0.0)
+	var bmat := StandardMaterial3D.new()
+	bmat.albedo_color = Color(1.0, 0.28, 0.22, 0.9)
+	bmat.emission_enabled = true
+	bmat.emission = Color(1.0, 0.22, 0.18, 1.0)
+	bmat.emission_energy_multiplier = 3.0
+	bmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_beacon.material_override = bmat
+	_beacon.visible = false
+	add_child(_beacon)
 
-func _physics_process(_delta: float) -> void:
-	if _overlapping_player and is_instance_valid(_overlapping_player) and _overlapping_player.has_method("take_damage"):
-		_overlapping_player.take_damage(damage, global_position)
+
+func _process(delta: float) -> void:
+	if _cd > 0.0:
+		_cd = maxf(_cd - delta, 0.0)
+
+
+func highlight_compass_beacon(duration: float = 10.0) -> void:
+	if not _beacon:
+		return
+	_beacon.visible = true
+	get_tree().create_timer(duration).timeout.connect(func() -> void:
+		if is_instance_valid(_beacon):
+			_beacon.visible = false
+	)
 
 
 func _on_body_entered(body: Node3D) -> void:
-	if body.is_in_group("player"):
-		_overlapping_player = body
-		if body.has_method("take_damage"):
-			body.take_damage(damage, global_position)
-
-
-func _on_body_exited(body: Node3D) -> void:
-	if body == _overlapping_player:
-		_overlapping_player = null
+	if _cd > 0.0 or not body.is_in_group("player"):
+		return
+	_cd = cooldown_time
+	if body.has_method("take_damage"):
+		body.take_damage(damage, global_position)

@@ -18,7 +18,7 @@ static func enhance_guardian(boss: Node3D) -> Dictionary:
 	if not vis:
 		return {}
 
-	var is_astral := ("max_hp" in boss and int(boss.get("max_hp")) >= 14)
+	var is_astral: bool = ("max_hp" in boss and int(boss.get("max_hp")) >= 14)
 
 	var foliage_mat := ShaderMaterial.new()
 	foliage_mat.shader = SHADER_FOLIAGE

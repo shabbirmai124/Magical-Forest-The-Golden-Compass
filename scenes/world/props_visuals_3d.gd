@@ -1,254 +1,434 @@
 extends RefCounted
-## Procedural sculpted mesh & PBR visual enhancers for 3D props, wisps, relics, and secret foliage veils.
-
-const MeshFactory3D = preload("res://scenes/common/mesh_factory_3d.gd")
-const SHADER_FOLIAGE: Shader = preload("res://resources/shaders/foliage_sway_3d.gdshader")
-const TEX_FERN_CARD: Texture2D = preload("res://assets/textures3d/fern_frond_card.png")
-const TEX_BRANCH_CARD: Texture2D = preload("res://assets/textures3d/foliage_branch_card.png")
-const MAT_STONE: StandardMaterial3D = preload("res://resources/materials3d/ancient_stone.tres")
-const MAT_FILIGREE: StandardMaterial3D = preload("res://resources/materials3d/metal_filigree.tres")
-const MAT_CRYSTAL: StandardMaterial3D = preload("res://resources/materials3d/crystal_prism.tres")
-const MAT_RUNE: StandardMaterial3D = preload("res://resources/materials3d/rune_stone.tres")
-const MAT_CLOAK: StandardMaterial3D = preload("res://resources/materials3d/char_cloak.tres")
+## Clean, stylized WebGL2-safe procedural 3D environment & landmark asset builders.
+## Uses vertex-colored / StandardMaterial3D meshes + MultiMeshInstance3D so 200+ trees,
+## rocks, ferns, and landmarks stay locked at 60 FPS inside the Godot 4 Web Editor.
 
 
-static func enhance_flying_wisp(wisp: Node3D) -> void:
-	var vis := wisp.get_node_or_null("Visuals") as Node3D
-	if not vis:
-		return
-
-	var core := vis.get_node_or_null("CoreMesh") as MeshInstance3D
-	if core:
-		core.mesh = MeshFactory3D.build_rune_shard_mesh(0.32, 0.78, 9)
-
-	var orbit_ring := vis.get_node_or_null("OrbitRing") as MeshInstance3D
-	if orbit_ring:
-		orbit_ring.mesh = MeshFactory3D.build_astrolabe_ring_mesh(0.56, 0.67, 0.045, 24)
-		orbit_ring.material_override = MAT_FILIGREE
-
-	# Counter-rotating inner gyro-ring
-	var inner_ring := MeshInstance3D.new()
-	inner_ring.name = "InnerRing"
-	inner_ring.mesh = MeshFactory3D.build_astrolabe_ring_mesh(0.42, 0.49, 0.035, 20)
-	inner_ring.rotation = Vector3(deg_to_rad(52.0), 0.0, deg_to_rad(24.0))
-	inner_ring.material_override = MAT_CRYSTAL
-	vis.add_child(inner_ring)
-
-	# Carved stone cowl & antlers above the wisp core
-	var cowl := MeshInstance3D.new()
-	cowl.name = "StoneCowl"
-	cowl.mesh = MeshFactory3D.build_lofted_tube_mesh([
-		{"center": Vector3(0.0, -0.05, 0.04), "rx": 0.42, "rz": 0.44, "v": 0.0},
-		{"center": Vector3(0.0, 0.24, 0.08), "rx": 0.34, "rz": 0.36, "v": 0.55},
-		{"center": Vector3(0.0, 0.46, 0.16), "rx": 0.09, "rz": 0.12, "v": 1.0},
-	], 10, true, 4, 0.03)
-	cowl.position = Vector3(0.0, 0.14, 0.0)
-	cowl.material_override = MAT_STONE
-	vis.add_child(cowl)
-
-	for side in [-1.0, 1.0]:
-		var antler := MeshInstance3D.new()
-		antler.name = "AntlerL" if side < 0.0 else "AntlerR"
-		antler.mesh = MeshFactory3D.build_lofted_tube_mesh([
-			{"center": Vector3(0.0, 0.0, 0.0), "rx": 0.055, "rz": 0.055, "v": 0.0},
-			{"center": Vector3(side * 0.18, 0.26, -0.04), "rx": 0.036, "rz": 0.036, "v": 0.55},
-			{"center": Vector3(side * 0.26, 0.54, 0.04), "rx": 0.012, "rz": 0.012, "v": 1.0},
-		], 6, true)
-		antler.position = Vector3(side * 0.22, 0.36, 0.02)
-		antler.material_override = MAT_RUNE
-		vis.add_child(antler)
-
-	# Flapping spectral mantle wings
-	var wing_mat := StandardMaterial3D.new()
-	wing_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	wing_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	wing_mat.albedo_color = Color(0.24, 0.78, 0.84, 0.76)
-	wing_mat.emission_enabled = true
-	wing_mat.emission = Color(0.18, 0.74, 0.82, 1.0)
-	wing_mat.emission_energy_multiplier = 1.25
-	wing_mat.roughness = 0.45
-
-	var wing_mesh := MeshFactory3D.build_curved_cloak_mesh(0.14, 0.36, 0.72, 4, 5)
-	for side_info in [["WingLeft", -1.0], ["WingRight", 1.0]]:
-		var w_pivot := Node3D.new()
-		w_pivot.name = String(side_info[0])
-		var s := float(side_info[1])
-		w_pivot.position = Vector3(s * 0.34, 0.14, 0.08)
-		w_pivot.rotation = Vector3(deg_to_rad(18.0), s * deg_to_rad(14.0), -s * 1.05)
-		var wm := MeshInstance3D.new()
-		wm.mesh = wing_mesh
-		wm.material_override = wing_mat
-		w_pivot.add_child(wm)
-		vis.add_child(w_pivot)
-
-	# 4 waving spectral tendrils hanging beneath the wisp
-	var tendril_mesh := MeshFactory3D.build_lofted_tube_mesh([
-		{"center": Vector3(0.0, 0.0, 0.0), "rx": 0.055, "rz": 0.055, "v": 0.0},
-		{"center": Vector3(0.02, -0.34, 0.03), "rx": 0.036, "rz": 0.036, "v": 0.5},
-		{"center": Vector3(-0.02, -0.72, 0.0), "rx": 0.008, "rz": 0.008, "v": 1.0},
-	], 6, true)
-	for ti in 4:
-		var ang := float(ti) * TAU * 0.25 + 0.4
-		var td := MeshInstance3D.new()
-		td.name = "Tendril_%d" % ti
-		td.mesh = tendril_mesh
-		td.position = Vector3(cos(ang) * 0.2, -0.32, sin(ang) * 0.2)
-		td.material_override = MAT_CLOAK
-		vis.add_child(td)
-
-	# Diegetic floating HP pips above wisp
-	var pips_root := Node3D.new()
-	pips_root.name = "HpPips"
-	pips_root.position = Vector3(0.0, 1.08, 0.0)
-	vis.add_child(pips_root)
-
-	var pip_mat := StandardMaterial3D.new()
-	pip_mat.albedo_color = Color(1.0, 0.42, 0.38, 1.0)
-	pip_mat.emission_enabled = true
-	pip_mat.emission = Color(1.0, 0.32, 0.28, 1.0)
-	pip_mat.emission_energy_multiplier = 2.6
-	pip_mat.roughness = 0.2
-
-	var pip_mesh := MeshFactory3D.build_rune_shard_mesh(0.06, 0.16, 5)
-	for pi in 4:
-		var pip := MeshInstance3D.new()
-		pip.name = "Pip_%d" % pi
-		pip.mesh = pip_mesh
-		pip.material_override = pip_mat
-		pips_root.add_child(pip)
+static func make_mat(col: Color, rough: float = 0.85, met: float = 0.0, emit_col: Color = Color.BLACK, emit_e: float = 0.0) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = col
+	m.roughness = rough
+	m.metallic = met
+	if emit_e > 0.0:
+		m.emission_enabled = true
+		m.emission = emit_col
+		m.emission_energy_multiplier = emit_e
+	return m
 
 
-static func enhance_crystal(crystal: Node3D) -> void:
-	var vp := crystal.get_node_or_null("VisualPivot") as Node3D
-	if not vp:
-		return
-	for child in vp.get_children():
-		child.queue_free()
-	var cluster := MeshInstance3D.new()
-	cluster.name = "CrystalCluster"
-	cluster.mesh = MeshFactory3D.build_crystal_cluster_mesh()
-	cluster.material_override = MAT_CRYSTAL
-	vp.add_child(cluster)
-
-	var halo := MeshInstance3D.new()
-	halo.name = "RuneHalo"
-	halo.mesh = MeshFactory3D.build_astrolabe_ring_mesh(0.36, 0.41, 0.024, 18)
-	halo.rotation.x = deg_to_rad(68.0)
-	halo.material_override = MAT_FILIGREE
-	vp.add_child(halo)
+static func build_pine_trunk_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.16
+	cm.bottom_radius = 0.42
+	cm.height = 5.4
+	cm.radial_segments = 7
+	st.append_from(cm, 0, Transform3D(Basis.IDENTITY, Vector3(0.0, 2.7, 0.0)))
+	return st.commit()
 
 
-static func enhance_healing_orb(orb: Node3D) -> Dictionary:
-	var result := {}
-	var vp := orb.get_node_or_null("VisualPivot") as Node3D
-	if not vp:
-		return result
-
-	var ring_mat := StandardMaterial3D.new()
-	ring_mat.albedo_color = Color(0.75, 1.0, 0.82, 1.0)
-	ring_mat.metallic = 0.72
-	ring_mat.roughness = 0.24
-	ring_mat.emission_enabled = true
-	ring_mat.emission = Color(0.28, 0.96, 0.58, 1.0)
-	ring_mat.emission_energy_multiplier = 1.4
-
-	var ring1 := MeshInstance3D.new()
-	ring1.name = "OrbitRing1"
-	ring1.mesh = MeshFactory3D.build_astrolabe_ring_mesh(0.42, 0.48, 0.028, 22)
-	ring1.rotation = Vector3(deg_to_rad(32.0), 0.0, deg_to_rad(18.0))
-	ring1.material_override = ring_mat
-	vp.add_child(ring1)
-
-	var ring2 := MeshInstance3D.new()
-	ring2.name = "OrbitRing2"
-	ring2.mesh = MeshFactory3D.build_astrolabe_ring_mesh(0.52, 0.58, 0.026, 22)
-	ring2.rotation = Vector3(deg_to_rad(-44.0), deg_to_rad(25.0), 0.0)
-	ring2.material_override = MAT_FILIGREE
-	vp.add_child(ring2)
-
-	result["ring1"] = ring1
-	result["ring2"] = ring2
-	return result
-
-
-static func enhance_golden_compass(compass: Node3D) -> Dictionary:
-	var result := {}
-	var vp := compass.get_node_or_null("VisualPivot") as Node3D
-	if not vp:
-		return result
-
-	var gold_mat := StandardMaterial3D.new()
-	gold_mat.albedo_color = Color(1.0, 0.84, 0.34, 1.0)
-	gold_mat.metallic = 0.94
-	gold_mat.roughness = 0.18
-	gold_mat.emission_enabled = true
-	gold_mat.emission = Color(0.95, 0.72, 0.2, 1.0)
-	gold_mat.emission_energy_multiplier = 0.9
-
-	var bezel := vp.get_node_or_null("Bezel") as MeshInstance3D
-	if bezel:
-		bezel.mesh = MeshFactory3D.build_astrolabe_ring_mesh(0.46, 0.64, 0.12, 32)
-		bezel.rotation = Vector3.ZERO
-		bezel.material_override = gold_mat
-
-	var outer_gimbal := MeshInstance3D.new()
-	outer_gimbal.name = "OuterGimbal"
-	outer_gimbal.mesh = MeshFactory3D.build_astrolabe_ring_mesh(0.72, 0.82, 0.055, 32)
-	outer_gimbal.rotation = Vector3(deg_to_rad(28.0), deg_to_rad(18.0), 0.0)
-	outer_gimbal.material_override = MAT_FILIGREE
-	vp.add_child(outer_gimbal)
-
-	var inner_gimbal := MeshInstance3D.new()
-	inner_gimbal.name = "InnerGimbal"
-	inner_gimbal.mesh = MeshFactory3D.build_astrolabe_ring_mesh(0.62, 0.70, 0.045, 28)
-	inner_gimbal.rotation = Vector3(deg_to_rad(-36.0), 0.0, deg_to_rad(32.0))
-	inner_gimbal.material_override = gold_mat
-	vp.add_child(inner_gimbal)
-
-	var rose := MeshInstance3D.new()
-	rose.name = "CompassRose"
-	rose.mesh = MeshFactory3D.build_compass_rose_mesh(0.42, 0.14)
-	rose.position = Vector3(0.0, 0.0, 0.09)
-	rose.material_override = gold_mat
-	vp.add_child(rose)
-
-	result["outer_gimbal"] = outer_gimbal
-	result["inner_gimbal"] = inner_gimbal
-	result["rose"] = rose
-	return result
-
-
-static func build_hidden_foliage_curtain(cover_group: Node3D) -> ShaderMaterial:
-	var mat := ShaderMaterial.new()
-	mat.shader = SHADER_FOLIAGE
-	mat.set_shader_parameter("foliage_tex", TEX_FERN_CARD)
-	mat.set_shader_parameter("tint", Color(1.0, 1.0, 1.0, 1.0))
-	mat.set_shader_parameter("wind_speed", 1.8)
-	mat.set_shader_parameter("wind_strength", 0.16)
-	mat.set_shader_parameter("emissive_spores", 1.1)
-
-	if not cover_group:
-		return mat
-
-	for child in cover_group.get_children():
-		child.queue_free()
-
-	var branch_mat := mat.duplicate() as ShaderMaterial
-	branch_mat.set_shader_parameter("foliage_tex", TEX_BRANCH_CARD)
-
-	var offsets: Array[Vector3] = [
-		Vector3(-1.8, 1.25, 0.35),
-		Vector3(-0.6, 1.45, -0.25),
-		Vector3(0.6, 1.4, 0.25),
-		Vector3(1.8, 1.2, -0.2),
-		Vector3(0.0, 2.2, 0.0),
+static func build_pine_canopy_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var tiers: Array = [
+		{"y": 4.2, "r": 2.45, "h": 3.4},
+		{"y": 6.4, "r": 1.92, "h": 3.0},
+		{"y": 8.3, "r": 1.32, "h": 2.6},
 	]
-	for i in offsets.size():
-		var bush := MeshInstance3D.new()
-		bush.name = "FoliageVeil_%d" % i
-		bush.mesh = MeshFactory3D.build_shrub_cluster_mesh(1.65, 14, 21 + i * 7)
-		bush.position = offsets[i]
-		bush.material_override = mat
-		cover_group.add_child(bush)
+	for t_var in tiers:
+		var t: Dictionary = t_var
+		var cone := CylinderMesh.new()
+		cone.top_radius = 0.04
+		cone.bottom_radius = float(t["r"])
+		cone.height = float(t["h"])
+		cone.radial_segments = 7
+		st.append_from(cone, 0, Transform3D(Basis.IDENTITY, Vector3(0.0, float(t["y"]), 0.0)))
+	return st.commit()
 
-	return mat
+
+static func build_oak_trunk_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.34
+	cm.bottom_radius = 0.62
+	cm.height = 4.6
+	cm.radial_segments = 8
+	st.append_from(cm, 0, Transform3D(Basis.IDENTITY, Vector3(0.0, 2.3, 0.0)))
+	return st.commit()
+
+
+static func build_oak_canopy_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var puffs: Array = [
+		{"pos": Vector3(0.0, 5.8, 0.0), "r": 2.4},
+		{"pos": Vector3(-1.45, 5.1, 0.8), "r": 1.65},
+		{"pos": Vector3(1.5, 5.2, -0.7), "r": 1.75},
+		{"pos": Vector3(0.2, 5.3, -1.4), "r": 1.55},
+		{"pos": Vector3(-0.4, 5.2, 1.45), "r": 1.5},
+	]
+	for p_var in puffs:
+		var p: Dictionary = p_var
+		var sp := SphereMesh.new()
+		sp.radius = float(p["r"])
+		sp.height = float(p["r"]) * 1.55
+		sp.radial_segments = 8
+		sp.rings = 5
+		st.append_from(sp, 0, Transform3D(Basis.IDENTITY, p["pos"]))
+	return st.commit()
+
+
+static func build_bush_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for off in [Vector3(0.0, 0.55, 0.0), Vector3(-0.55, 0.42, 0.32), Vector3(0.52, 0.44, -0.28)]:
+		var sp := SphereMesh.new()
+		sp.radius = 0.72
+		sp.height = 1.05
+		sp.radial_segments = 7
+		sp.rings = 4
+		st.append_from(sp, 0, Transform3D(Basis.IDENTITY, off))
+	return st.commit()
+
+
+static func build_rock_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var sp := SphereMesh.new()
+	sp.radius = 1.0
+	sp.height = 1.35
+	sp.radial_segments = 7
+	sp.rings = 4
+	st.append_from(sp, 0, Transform3D(Basis.IDENTITY.scaled(Vector3(1.15, 0.78, 0.95)), Vector3(0.0, 0.4, 0.0)))
+	return st.commit()
+
+
+static func build_mushroom_cluster_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for cfg in [
+		{"p": Vector3(0.0, 0.45, 0.0), "r": 0.36, "h": 0.45},
+		{"p": Vector3(-0.34, 0.3, 0.22), "r": 0.24, "h": 0.3},
+		{"p": Vector3(0.32, 0.34, -0.18), "r": 0.26, "h": 0.34},
+	]:
+		var pos: Vector3 = cfg["p"]
+		var cap := SphereMesh.new()
+		cap.radius = float(cfg["r"])
+		cap.height = float(cfg["r"]) * 0.85
+		cap.radial_segments = 8
+		cap.rings = 4
+		st.append_from(cap, 0, Transform3D(Basis.IDENTITY, pos))
+	return st.commit()
+
+
+static func spawn_multimesh(parent: Node3D, xforms: Array, mesh_res: Mesh, mat: Material) -> MultiMeshInstance3D:
+	if xforms.is_empty() or not mesh_res:
+		return null
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh_res
+	mm.instance_count = xforms.size()
+	for i in xforms.size():
+		mm.set_instance_transform(i, xforms[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.material_override = mat
+	parent.add_child(mmi)
+	return mmi
+
+
+static func spawn_campfire(parent: Node3D, pos: Vector3, add_light: bool = true) -> Node3D:
+	var root := Node3D.new()
+	root.name = "Campfire"
+	root.position = pos
+	parent.add_child(root)
+
+	var stone_mat := make_mat(Color(0.32, 0.36, 0.38, 1.0), 0.92)
+	var wood_mat := make_mat(Color(0.28, 0.16, 0.09, 1.0), 0.92)
+	var fire_mat := make_mat(Color(1.0, 0.62, 0.18, 1.0), 0.2, 0.0, Color(1.0, 0.52, 0.12, 1.0), 3.6)
+
+	for i in 8:
+		var ang: float = (float(i) / 8.0) * TAU
+		var rock := MeshInstance3D.new()
+		var rm := SphereMesh.new()
+		rm.radius = 0.24
+		rm.height = 0.34
+		rm.radial_segments = 6
+		rock.mesh = rm
+		rock.position = Vector3(cos(ang) * 0.82, 0.14, sin(ang) * 0.82)
+		rock.material_override = stone_mat
+		root.add_child(rock)
+
+	for ang_deg in [25.0, 85.0, 145.0]:
+		var log_m := MeshInstance3D.new()
+		var lm := CylinderMesh.new()
+		lm.top_radius = 0.09
+		lm.bottom_radius = 0.11
+		lm.height = 1.25
+		lm.radial_segments = 6
+		log_m.mesh = lm
+		log_m.position = Vector3(0.0, 0.18, 0.0)
+		log_m.rotation = Vector3(PI * 0.44, deg_to_rad(ang_deg), 0.0)
+		log_m.material_override = wood_mat
+		root.add_child(log_m)
+
+	var flame := MeshInstance3D.new()
+	var fm := CylinderMesh.new()
+	fm.top_radius = 0.04
+	fm.bottom_radius = 0.38
+	fm.height = 0.92
+	fm.radial_segments = 7
+	flame.mesh = fm
+	flame.position = Vector3(0.0, 0.56, 0.0)
+	flame.material_override = fire_mat
+	root.add_child(flame)
+
+	if add_light:
+		var lt := OmniLight3D.new()
+		lt.position = Vector3(0.0, 1.2, 0.0)
+		lt.light_color = Color(1.0, 0.68, 0.3, 1.0)
+		lt.light_energy = 3.2
+		lt.omni_range = 16.0
+		root.add_child(lt)
+	return root
+
+
+static func spawn_lantern_post(parent: Node3D, pos: Vector3, yaw_rad: float = 0.0, add_light: bool = false) -> Node3D:
+	var root := Node3D.new()
+	root.position = pos
+	root.rotation.y = yaw_rad
+	parent.add_child(root)
+
+	var wood_mat := make_mat(Color(0.28, 0.19, 0.12, 1.0), 0.9)
+	var iron_mat := make_mat(Color(0.18, 0.2, 0.24, 1.0), 0.45, 0.7)
+	var bulb_mat := make_mat(Color(1.0, 0.9, 0.48, 1.0), 0.2, 0.0, Color(1.0, 0.82, 0.32, 1.0), 3.6)
+
+	var post := MeshInstance3D.new()
+	var pm := CylinderMesh.new()
+	pm.top_radius = 0.09
+	pm.bottom_radius = 0.14
+	pm.height = 3.1
+	pm.radial_segments = 6
+	post.mesh = pm
+	post.position = Vector3(0.0, 1.55, 0.0)
+	post.material_override = wood_mat
+	root.add_child(post)
+
+	var arm := MeshInstance3D.new()
+	var am := BoxMesh.new()
+	am.size = Vector3(0.85, 0.1, 0.1)
+	arm.mesh = am
+	arm.position = Vector3(0.36, 2.92, 0.0)
+	arm.material_override = iron_mat
+	root.add_child(arm)
+
+	var bulb := MeshInstance3D.new()
+	var bm := SphereMesh.new()
+	bm.radius = 0.18
+	bm.height = 0.36
+	bm.radial_segments = 8
+	bulb.mesh = bm
+	bulb.position = Vector3(0.68, 2.66, 0.0)
+	bulb.material_override = bulb_mat
+	root.add_child(bulb)
+
+	if add_light:
+		var lt := OmniLight3D.new()
+		lt.position = Vector3(0.68, 2.66, 0.0)
+		lt.light_color = Color(1.0, 0.82, 0.42, 1.0)
+		lt.light_energy = 2.4
+		lt.omni_range = 15.0
+		root.add_child(lt)
+	return root
+
+
+static func spawn_stone_archway(parent: Node3D, pos: Vector3, width: float = 9.0, height: float = 6.2, yaw_rad: float = 0.0, rune_color: Color = Color(0.38, 0.95, 0.82, 1.0)) -> Node3D:
+	var root := Node3D.new()
+	root.position = pos
+	root.rotation.y = yaw_rad
+	parent.add_child(root)
+
+	var stone_mat := make_mat(Color(0.28, 0.34, 0.36, 1.0), 0.88)
+	var rune_mat := make_mat(rune_color, 0.25, 0.1, rune_color, 2.4)
+	var half_w: float = width * 0.5
+
+	for sgn in [-1.0, 1.0]:
+		var body := StaticBody3D.new()
+		body.collision_layer = 1
+		body.collision_mask = 0
+		body.position = Vector3(sgn * half_w, height * 0.5, 0.0)
+		var col := CollisionShape3D.new()
+		var cs := CylinderShape3D.new()
+		cs.radius = 0.65
+		cs.height = height
+		col.shape = cs
+		body.add_child(col)
+
+		var pil := MeshInstance3D.new()
+		var pm := CylinderMesh.new()
+		pm.top_radius = 0.52
+		pm.bottom_radius = 0.68
+		pm.height = height
+		pm.radial_segments = 8
+		pil.mesh = pm
+		pil.material_override = stone_mat
+		body.add_child(pil)
+		root.add_child(body)
+
+	var lintel := MeshInstance3D.new()
+	var lm := BoxMesh.new()
+	lm.size = Vector3(width + 2.2, 1.1, 1.45)
+	lintel.mesh = lm
+	lintel.position = Vector3(0.0, height + 0.45, 0.0)
+	lintel.material_override = stone_mat
+	root.add_child(lintel)
+
+	var gem := MeshInstance3D.new()
+	var gm := SphereMesh.new()
+	gm.radius = 0.46
+	gm.height = 0.95
+	gem.mesh = gm
+	gem.position = Vector3(0.0, height + 0.5, 0.0)
+	gem.material_override = rune_mat
+	root.add_child(gem)
+	return root
+
+
+static func spawn_signpost(parent: Node3D, pos: Vector3, yaw_deg: float = 0.0) -> Node3D:
+	var root := Node3D.new()
+	root.position = pos
+	root.rotation.y = deg_to_rad(yaw_deg)
+	parent.add_child(root)
+
+	var wood_mat := make_mat(Color(0.34, 0.22, 0.12, 1.0), 0.88)
+	var gold_mat := make_mat(Color(0.98, 0.82, 0.3, 1.0), 0.3, 0.6, Color(0.95, 0.78, 0.25, 1.0), 0.8)
+
+	var post := MeshInstance3D.new()
+	var pm := CylinderMesh.new()
+	pm.top_radius = 0.09
+	pm.bottom_radius = 0.12
+	pm.height = 2.3
+	pm.radial_segments = 6
+	post.mesh = pm
+	post.position = Vector3(0.0, 1.15, 0.0)
+	post.material_override = wood_mat
+	root.add_child(post)
+
+	var board := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(1.25, 0.34, 0.1)
+	board.mesh = bm
+	board.position = Vector3(0.35, 1.92, 0.0)
+	board.material_override = wood_mat
+	root.add_child(board)
+
+	var arrow := MeshInstance3D.new()
+	var am := CylinderMesh.new()
+	am.top_radius = 0.01
+	am.bottom_radius = 0.18
+	am.height = 0.32
+	am.radial_segments = 4
+	arrow.mesh = am
+	arrow.position = Vector3(1.08, 1.92, 0.0)
+	arrow.rotation.z = -PI * 0.5
+	arrow.material_override = gold_mat
+	root.add_child(arrow)
+	return root
+
+
+static func spawn_ruin_pillar(parent: Node3D, pos: Vector3, height: float = 5.5, stone_col: Color = Color(0.28, 0.34, 0.38, 1.0)) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.collision_layer = 1
+	body.collision_mask = 0
+	body.position = pos
+	parent.add_child(body)
+
+	var col := CollisionShape3D.new()
+	var cs := CylinderShape3D.new()
+	cs.radius = 0.75
+	cs.height = height
+	col.shape = cs
+	col.position = Vector3(0.0, height * 0.5, 0.0)
+	body.add_child(col)
+
+	var mat := make_mat(stone_col, 0.86)
+	var shaft := MeshInstance3D.new()
+	var sm := CylinderMesh.new()
+	sm.top_radius = 0.62
+	sm.bottom_radius = 0.76
+	sm.height = height
+	sm.radial_segments = 8
+	shaft.mesh = sm
+	shaft.position = Vector3(0.0, height * 0.5, 0.0)
+	shaft.material_override = mat
+	body.add_child(shaft)
+
+	var cap := MeshInstance3D.new()
+	var cm := BoxMesh.new()
+	cm.size = Vector3(1.8, 0.42, 1.8)
+	cap.mesh = cm
+	cap.position = Vector3(0.0, height + 0.18, 0.0)
+	cap.material_override = mat
+	body.add_child(cap)
+	return body
+
+
+static func spawn_fallen_log(parent: Node3D, pos: Vector3, yaw_rad: float = 0.4) -> Node3D:
+	var root := Node3D.new()
+	root.position = pos
+	root.rotation.y = yaw_rad
+	parent.add_child(root)
+	var bark_mat := make_mat(Color(0.26, 0.17, 0.11, 1.0), 0.92)
+	var log_m := MeshInstance3D.new()
+	var lm := CylinderMesh.new()
+	lm.top_radius = 0.34
+	lm.bottom_radius = 0.44
+	lm.height = 4.4
+	lm.radial_segments = 7
+	log_m.mesh = lm
+	log_m.position = Vector3(0.0, 0.34, 0.0)
+	log_m.rotation.z = PI * 0.5
+	log_m.material_override = bark_mat
+	root.add_child(log_m)
+	return root
+
+
+static func spawn_pond(parent: Node3D, pos: Vector3, radius: float = 11.0) -> MeshInstance3D:
+	var pond := MeshInstance3D.new()
+	var pm := CylinderMesh.new()
+	pm.top_radius = radius
+	pm.bottom_radius = radius
+	pm.height = 0.12
+	pm.radial_segments = 20
+	pond.mesh = pm
+	pond.position = pos
+	var wmat := StandardMaterial3D.new()
+	wmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	wmat.albedo_color = Color(0.12, 0.52, 0.68, 0.82)
+	wmat.roughness = 0.12
+	wmat.metallic = 0.25
+	wmat.emission_enabled = true
+	wmat.emission = Color(0.08, 0.36, 0.48, 1.0)
+	wmat.emission_energy_multiplier = 0.65
+	pond.material_override = wmat
+	parent.add_child(pond)
+	return pond
+
+
+# Backwards-compatible helper hooks
+static func enhance_flying_wisp(_wisp: Node3D) -> void:
+	pass
+
+static func enhance_crystal(_crystal: Node3D) -> void:
+	pass
+
+static func enhance_healing_orb(_orb: Node3D) -> Dictionary:
+	return {}
+
+static func enhance_golden_compass(_compass: Node3D) -> Dictionary:
+	return {}
+
+static func build_hidden_foliage_curtain(_cover_group: Node3D) -> ShaderMaterial:
+	return null

@@ -1,146 +1,187 @@
 extends Area3D
-## 3D Ancient Dimensional Portal — advances to the next stage when active.
-## Supports starts_dormant mode (Stage 3 Astral Portal unlocked by the Golden Compass).
+## 3D Ancient Dimensional Portal Arch — displays dim crimson seal while Main Quest is incomplete,
+## then erupts into a swirling emerald-gold vortex ([E] Enter Portal) once unlocked.
 
-const MeshFactory3D = preload("res://scenes/common/mesh_factory_3d.gd")
-const SHADER_PORTAL: Shader = preload("res://resources/shaders/portal_vortex_3d.gdshader")
-const MAT_STONE: StandardMaterial3D = preload("res://resources/materials3d/ancient_stone.tres")
-const MAT_RUNE: StandardMaterial3D = preload("res://resources/materials3d/rune_stone.tres")
-const MAT_FILIGREE: StandardMaterial3D = preload("res://resources/materials3d/metal_filigree.tres")
+@export var portal_name: String = "Grove Portal"
+@export var next_stage_label: String = "Thornhollow Ruins"
+@export var quest_step_key: String = "enter_portal_1"
+@export var starts_dormant: bool = true
 
-@export var starts_dormant: bool = false
-
-@onready var vortex_mesh: MeshInstance3D = $VortexDisc
-@onready var outer_ring: MeshInstance3D = $OuterAstrolabe
-@onready var portal_light: OmniLight3D = $PortalLight
-@onready var trigger_col: CollisionShape3D = $CollisionShape3D
-@onready var sfx: AudioStreamPlayer = $PortalSFX
-
-var _is_active: bool = true
+var compass_label: String = "Grove Portal"
+var _is_active: bool = false
 var _triggered: bool = false
 var _t: float = 0.0
-var _vortex_mat: ShaderMaterial = null
+var _vortex_mesh: MeshInstance3D = null
+var _ring_mesh: MeshInstance3D = null
+var _vortex_mat: StandardMaterial3D = null
+var _rune_mat: StandardMaterial3D = null
 
 
 func _ready() -> void:
+	compass_label = portal_name
+	add_to_group("portal")
 	add_to_group("stage_portals")
-	body_entered.connect(_on_body_entered)
+	add_to_group("interactable")
 	_build_archway()
-
-	_vortex_mat = ShaderMaterial.new()
-	_vortex_mat.shader = SHADER_PORTAL
-	_vortex_mat.set_shader_parameter("outer_color", Color(0.08, 0.65, 0.78))
-	_vortex_mat.set_shader_parameter("inner_color", Color(0.72, 1.0, 0.96))
-	if vortex_mesh:
-		vortex_mesh.material_override = _vortex_mat
-	if outer_ring:
-		outer_ring.mesh = MeshFactory3D.build_astrolabe_ring_mesh(2.15, 2.48, 0.16, 36)
-		outer_ring.material_override = MAT_FILIGREE
-
-	if starts_dormant:
-		add_to_group("awakened_portal")
-		_set_portal_active(false)
-	else:
-		_set_portal_active(true)
+	_set_portal_active(not starts_dormant)
 
 
 func _build_archway() -> void:
-	var arch_root := Node3D.new()
-	arch_root.name = "PortalArchway"
-	add_child(arch_root)
+	var stone_mat := StandardMaterial3D.new()
+	stone_mat.albedo_color = Color(0.24, 0.29, 0.34, 1.0)
+	stone_mat.roughness = 0.86
 
-	var col_mesh := MeshFactory3D.build_fluted_column_mesh(0.55, 5.4)
-	for side in [-1.0, 1.0]:
-		var pillar := MeshInstance3D.new()
-		pillar.mesh = col_mesh
-		pillar.position = Vector3(side * 2.55, 2.7, 0.0)
-		pillar.material_override = MAT_STONE
-		arch_root.add_child(pillar)
-
-		var plinth := MeshInstance3D.new()
-		var pm := BoxMesh.new()
-		pm.size = Vector3(1.55, 0.72, 1.55)
-		plinth.mesh = pm
-		plinth.position = Vector3(side * 2.55, 0.36, 0.0)
-		plinth.material_override = MAT_RUNE
-		arch_root.add_child(plinth)
-
-	var lintel := MeshInstance3D.new()
-	var lm := BoxMesh.new()
-	lm.size = Vector3(6.8, 0.95, 1.65)
-	lintel.mesh = lm
-	lintel.position = Vector3(0.0, 5.65, 0.0)
-	lintel.material_override = MAT_STONE
-	arch_root.add_child(lintel)
-
-	var keystone := MeshInstance3D.new()
-	keystone.mesh = MeshFactory3D.build_rune_shard_mesh(0.42, 1.15, 19)
-	keystone.position = Vector3(0.0, 6.45, 0.0)
-	keystone.material_override = MAT_RUNE
-	arch_root.add_child(keystone)
+	_rune_mat = StandardMaterial3D.new()
+	_rune_mat.albedo_color = Color(0.85, 0.25, 0.25, 1.0)
+	_rune_mat.emission_enabled = true
+	_rune_mat.emission = Color(0.85, 0.2, 0.2, 1.0)
+	_rune_mat.emission_energy_multiplier = 1.6
 
 	var base_step := MeshInstance3D.new()
 	var bm := CylinderMesh.new()
-	bm.top_radius = 3.4
-	bm.bottom_radius = 3.9
-	bm.height = 0.42
+	bm.top_radius = 4.2
+	bm.bottom_radius = 4.8
+	bm.height = 0.45
+	bm.radial_segments = 12
 	base_step.mesh = bm
-	base_step.position = Vector3(0.0, 0.12, 0.0)
-	base_step.material_override = MAT_STONE
-	arch_root.add_child(base_step)
+	base_step.position = Vector3(0.0, 0.22, 0.0)
+	base_step.material_override = stone_mat
+	add_child(base_step)
+
+	for sgn in [-1.0, 1.0]:
+		var pillar := MeshInstance3D.new()
+		var pm := CylinderMesh.new()
+		pm.top_radius = 0.56
+		pm.bottom_radius = 0.68
+		pm.height = 6.2
+		pm.radial_segments = 10
+		pillar.mesh = pm
+		pillar.position = Vector3(sgn * 3.1, 3.1, 0.0)
+		pillar.material_override = stone_mat
+		add_child(pillar)
+
+		var rune_col := MeshInstance3D.new()
+		var rcm := BoxMesh.new()
+		rcm.size = Vector3(0.24, 4.4, 1.25)
+		rune_col.mesh = rcm
+		rune_col.position = Vector3(sgn * 3.1, 3.1, 0.0)
+		rune_col.material_override = _rune_mat
+		add_child(rune_col)
+
+	var lintel := MeshInstance3D.new()
+	var lm := BoxMesh.new()
+	lm.size = Vector3(7.8, 1.1, 1.65)
+	lintel.mesh = lm
+	lintel.position = Vector3(0.0, 6.45, 0.0)
+	lintel.material_override = stone_mat
+	add_child(lintel)
+
+	var keystone := MeshInstance3D.new()
+	var km := SphereMesh.new()
+	km.radius = 0.58
+	km.height = 1.25
+	keystone.mesh = km
+	keystone.position = Vector3(0.0, 7.2, 0.0)
+	keystone.material_override = _rune_mat
+	add_child(keystone)
+
+	_ring_mesh = get_node_or_null("OuterAstrolabe") as MeshInstance3D
+	if not _ring_mesh:
+		_ring_mesh = MeshInstance3D.new()
+		_ring_mesh.name = "OuterAstrolabe"
+		add_child(_ring_mesh)
+	var tm := TorusMesh.new()
+	tm.inner_radius = 2.25
+	tm.outer_radius = 2.55
+	tm.rings = 24
+	tm.ring_segments = 8
+	_ring_mesh.mesh = tm
+	_ring_mesh.position = Vector3(0.0, 3.25, 0.0)
+	_ring_mesh.rotation.x = PI * 0.5
+	_ring_mesh.material_override = _rune_mat
+
+	_vortex_mat = StandardMaterial3D.new()
+	_vortex_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_vortex_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_vortex_mat.albedo_color = Color(0.25, 0.96, 0.78, 0.72)
+	_vortex_mat.emission_enabled = true
+	_vortex_mat.emission = Color(0.32, 0.96, 0.72, 1.0)
+	_vortex_mat.emission_energy_multiplier = 3.0
+	_vortex_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	_vortex_mesh = get_node_or_null("VortexDisc") as MeshInstance3D
+	if not _vortex_mesh:
+		_vortex_mesh = MeshInstance3D.new()
+		_vortex_mesh.name = "VortexDisc"
+		add_child(_vortex_mesh)
+	var vm := CylinderMesh.new()
+	vm.top_radius = 2.2
+	vm.bottom_radius = 2.2
+	vm.height = 0.08
+	vm.radial_segments = 24
+	_vortex_mesh.mesh = vm
+	_vortex_mesh.position = Vector3(0.0, 3.25, 0.0)
+	_vortex_mesh.rotation.x = PI * 0.5
+	_vortex_mesh.material_override = _vortex_mat
 
 
 func _set_portal_active(active: bool) -> void:
 	_is_active = active
-	if vortex_mesh:
-		vortex_mesh.visible = active
-	if portal_light:
-		portal_light.light_energy = 4.2 if active else 0.45
-		portal_light.light_color = Color(0.32, 0.96, 0.92) if active else Color(0.45, 0.48, 0.65)
+	if _vortex_mesh:
+		_vortex_mesh.visible = active
+	if _rune_mat:
+		if active:
+			_rune_mat.albedo_color = Color(0.35, 0.98, 0.78, 1.0)
+			_rune_mat.emission = Color(0.3, 0.96, 0.76, 1.0)
+			_rune_mat.emission_energy_multiplier = 3.2
+		else:
+			_rune_mat.albedo_color = Color(0.82, 0.24, 0.24, 1.0)
+			_rune_mat.emission = Color(0.85, 0.18, 0.18, 1.0)
+			_rune_mat.emission_energy_multiplier = 1.4
 
 
 func awaken_portal() -> void:
 	if _is_active:
 		return
 	_set_portal_active(true)
-	if _vortex_mat:
-		_vortex_mat.set_shader_parameter("outer_color", Color(0.26, 0.52, 0.98))
-		_vortex_mat.set_shader_parameter("inner_color", Color(1.0, 0.92, 0.56))
-	if vortex_mesh:
-		vortex_mesh.scale = Vector3(0.05, 0.05, 0.05)
-		create_tween().tween_property(vortex_mesh, "scale", Vector3.ONE, 0.85).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	if portal_light:
-		portal_light.light_color = Color(0.55, 0.88, 1.0)
-		portal_light.light_energy = 0.5
-		create_tween().tween_property(portal_light, "light_energy", 5.2, 0.85)
-	if sfx and sfx.stream:
-		sfx.pitch_scale = 0.92
-		sfx.play()
+	if AudioManager:
+		AudioManager.play_sfx("portal_unlock")
+	GameManager.post_toast("PORTAL UNSEALED", "%s is now open — enter to reach %s!" % [portal_name, next_stage_label], Color(0.45, 1.0, 0.82))
+	if _vortex_mesh:
+		_vortex_mesh.scale = Vector3(0.1, 0.1, 0.1)
+		create_tween().tween_property(_vortex_mesh, "scale", Vector3.ONE, 0.7).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _process(delta: float) -> void:
 	_t += delta
-	if outer_ring:
-		outer_ring.rotate_z(delta * (1.2 if _is_active else 0.18))
-	if portal_light and _is_active:
-		portal_light.light_energy = 4.2 + sin(_t * 3.4) * 0.55
+	if _ring_mesh:
+		_ring_mesh.rotate_z(delta * (1.4 if _is_active else 0.2))
+	if _vortex_mesh and _is_active:
+		var pulse: float = 1.0 + sin(_t * 3.8) * 0.04
+		_vortex_mesh.scale = Vector3(pulse, 1.0, pulse)
 
 
-func _on_body_entered(body: Node3D) -> void:
-	if _triggered or not body.is_in_group("player"):
+func get_interact_prompt() -> String:
+	if not _is_active:
+		return "LOCKED — Complete Main Quest to unseal %s" % portal_name
+	return "[E] Enter %s -> %s" % [portal_name, next_stage_label]
+
+
+func interact(_player: Node3D) -> void:
+	if _triggered:
 		return
 	if not _is_active:
-		GameManager.notification_posted.emit("The Astral Portal lies dormant — vanquish the Guardian & claim the Golden Compass!", Color(0.96, 0.82, 0.42))
+		if AudioManager:
+			AudioManager.play_sfx("player_hurt", 0.7, 0.8)
+		GameManager.post_toast("PORTAL SEALED", "Complete the Stage Main Quest objectives first!", Color(1.0, 0.48, 0.42))
 		return
 	_triggered = true
-	if trigger_col:
-		trigger_col.set_deferred("disabled", true)
-	if sfx and sfx.stream:
-		sfx.pitch_scale = 1.05
-		sfx.play()
-	GameManager.add_score(150)
-	var hud := get_tree().get_first_node_in_group("hud")
+	if AudioManager:
+		AudioManager.play_sfx("portal_unlock", 1.15, 1.2)
+	if not quest_step_key.is_empty() and QuestManager:
+		QuestManager.record_progress(quest_step_key, 1)
+	var hud: Node = get_tree().get_first_node_in_group("hud")
 	if hud and hud.has_method("fade_to_black"):
-		await hud.fade_to_black(0.4)
+		await hud.fade_to_black(0.35)
 	if is_inside_tree():
 		GameManager.next_level()

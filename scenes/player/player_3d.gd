@@ -1,32 +1,36 @@
 extends CharacterBody3D
-## 3D Woodland Explorer with sculpted equipment, cloth cape shader physics,
-## dynamic camera zoom (Mouse Wheel), 2-hit melee combo with fading crescent ribbon,
-## tactical Evade Dash with light surge, breathing/banking/pendulum lantern animations,
-## stride-synced moss footsteps, coyote time, jump buffering, and i-frames.
+## 3D Woodland Explorer Controller — Pure Godot 4 (GDScript / WebGL2 gl_compatibility)
+## Smooth 3rd-person orbit camera with SpringArm3D collision avoidance,
+## WASD/Arrow movement, Space Jump + Double Jump (coyote + buffer), Shift Dash (i-frames + FOV kick),
+## 3-Hit Melee Combo (LMB / J) + Golden Compass Arc Ranged Wave (RMB / K),
+## Golden Compass Pulse [G] (shockwave + 16 firefly trail orbs + beacons + Astral Bridge & Boss Shield shatter),
+## Interact [E], Healing Herb [H], Y < -20m failsafe respawn, and live QuestManager compass tracking.
 
 const PlayerVisuals3D = preload("res://scenes/player/player_visuals_3d.gd")
+const GOLDEN_ARC_SCRIPT = preload("res://scenes/player/golden_arc_3d.gd")
 
 @export_group("Movement")
-@export var walk_speed: float = 7.8
-@export var sprint_speed: float = 11.6
-@export var dash_speed: float = 20.5
-@export var dash_duration: float = 0.25
-@export var dash_cooldown_time: float = 0.50
+@export var walk_speed: float = 8.4
+@export var sprint_speed: float = 12.2
+@export var dash_speed: float = 21.5
+@export var dash_duration: float = 0.24
+@export var dash_cooldown_time: float = 1.1
 @export var ground_accel: float = 52.0
-@export var ground_friction: float = 58.0
-@export var air_accel: float = 28.0
-@export var air_friction: float = 12.0
+@export var ground_friction: float = 56.0
+@export var air_accel: float = 30.0
+@export var air_friction: float = 10.0
 @export var mouse_sensitivity: float = 0.0028
 @export var key_turn_speed: float = 2.4
 
 @export_group("Jumping & Gravity")
-@export var allow_jump: bool = false
-@export var jump_velocity: float = 13.5
-@export var gravity_value: float = 26.0
+@export var allow_jump: bool = true
+@export var jump_velocity: float = 12.6
+@export var double_jump_velocity: float = 11.4
+@export var gravity_value: float = 27.0
 @export var fall_gravity_mult: float = 1.32
 @export var max_fall_speed: float = 34.0
 @export var coyote_time: float = 0.14
-@export var jump_buffer_time: float = 0.14
+@export var jump_buffer_time: float = 0.12
 
 @onready var visual_rig: Node3D = $VisualRig
 @onready var body_pivot: Node3D = $VisualRig/BodyPivot
@@ -45,15 +49,10 @@ const PlayerVisuals3D = preload("res://scenes/player/player_visuals_3d.gd")
 @onready var spring_arm: SpringArm3D = $CameraYaw/CameraPitch/SpringArm3D
 @onready var cam: Camera3D = $CameraYaw/CameraPitch/SpringArm3D/Camera3D
 @onready var footstep_dust: GPUParticles3D = $FootstepDust
-@onready var jump_sfx: AudioStreamPlayer = $Audio/Jump
-@onready var land_sfx: AudioStreamPlayer = $Audio/Land
-@onready var swing_sfx: AudioStreamPlayer = $Audio/AttackSwing
-@onready var hurt_sfx: AudioStreamPlayer = $Audio/Hurt
-@onready var footstep_sfx: AudioStreamPlayer = $Audio/Footstep
-@onready var dash_sfx: AudioStreamPlayer = $Audio/Dash
 
 var coyote_timer: float = 0.0
 var jump_buffer_timer: float = 0.0
+var _air_jumps_left: int = 1
 var is_attacking: bool = false
 var is_invincible: bool = false
 var is_dashing: bool = false
@@ -61,41 +60,48 @@ var input_locked: bool = false
 var _was_on_floor: bool = true
 var _hit_this_swing: Array[Node3D] = []
 var _swing_active: bool = false
-var _swing_damage: int = 1
+var _swing_damage: int = 18
 var _attack_buffer_timer: float = 0.0
 var _combo_reset_timer: float = 0.0
+var _ranged_cooldown: float = 0.0
 var _anim_t: float = 0.0
-var _base_lantern_energy: float = 2.9
+var _base_lantern_energy: float = 2.4
 var _cloak_mat: ShaderMaterial = null
 var _slash_mat: StandardMaterial3D = null
 var _cam_base_pos: Vector3 = Vector3(0.36, 0.22, 0.0)
 var _shake_tween: Tween = null
-var _target_zoom: float = 6.6
+var _target_zoom: float = 7.0
+var _target_fov: float = 64.0
 var _combo_step: int = 0
 var _dash_timer: float = 0.0
 var _dash_cooldown: float = 0.0
 var _dash_dir: Vector3 = Vector3.FORWARD
 var _step_dist_accum: float = 0.0
 var _prev_yaw: float = 0.0
-var _auto_run: bool = false
 var _l_knee: Node3D = null
 var _r_knee: Node3D = null
 var _l_elbow: Node3D = null
 var _r_elbow: Node3D = null
 var _lantern_swing: Node3D = null
 var _compass_needle: Node3D = null
-var _level_ctrl: Node = null
 var _compass_pulse_cd: float = 0.0
+var _compass_pulse_max_cd: float = 5.5
 var _compass_ui_accum: float = 0.0
-var _compass_sfx: AudioStreamPlayer = null
+var _interact_scan_accum: float = 0.0
+var _nearest_interactable: Node3D = null
+var _last_prompt_visible: bool = false
+var _last_prompt_text: String = ""
+var _hitstop_active: bool = false
 var _compass_mote_mat: StandardMaterial3D = null
 var _compass_mote_mesh: SphereMesh = null
 
 
 func _ready() -> void:
 	add_to_group("player")
-	attack_area.monitoring = false
-	attack_area.body_entered.connect(_on_attack_hit)
+	if attack_area:
+		attack_area.monitoring = false
+		attack_area.body_entered.connect(_on_attack_hit)
+		attack_area.area_entered.connect(_on_attack_area_hit)
 	_cloak_mat = PlayerVisuals3D.enhance_explorer(self)
 	_l_knee = left_leg.get_node_or_null("KneePivot") as Node3D
 	_r_knee = right_leg.get_node_or_null("KneePivot") as Node3D
@@ -104,79 +110,186 @@ func _ready() -> void:
 	if _l_elbow:
 		_lantern_swing = _l_elbow.get_node_or_null("LanternSwingPivot") as Node3D
 	_compass_needle = body_pivot.get_node_or_null("CompassBrooch/CompassBroochNeedle") as Node3D
-	_setup_compass_pulse_assets()
+	_setup_compass_vfx_assets()
+
 	if slash_arc and slash_arc.material_override is StandardMaterial3D:
 		_slash_mat = (slash_arc.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
 		slash_arc.material_override = _slash_mat
 	if lantern_light:
 		_base_lantern_energy = lantern_light.light_energy
 	if spring_arm:
+		spring_arm.collision_mask = 1
+		spring_arm.spring_length = 7.0
 		_target_zoom = spring_arm.spring_length
 	if cam:
 		_cam_base_pos = cam.position
+		_target_fov = cam.fov
 	_prev_yaw = visual_rig.rotation.y
 	GameManager.dash_cooldown_changed.emit(1.0)
-	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	GameManager.compass_pulse_cooldown_changed.emit(1.0)
+	GameManager.set_gameplay_mouse()
+
+
+func _setup_compass_vfx_assets() -> void:
+	_compass_mote_mat = StandardMaterial3D.new()
+	_compass_mote_mat.albedo_color = Color(1.0, 0.92, 0.45, 1.0)
+	_compass_mote_mat.emission_enabled = true
+	_compass_mote_mat.emission = Color(1.0, 0.84, 0.25, 1.0)
+	_compass_mote_mat.emission_energy_multiplier = 3.6
+	_compass_mote_mat.roughness = 0.2
+	_compass_mote_mesh = SphereMesh.new()
+	_compass_mote_mesh.radius = 0.14
+	_compass_mote_mesh.height = 0.28
+
+
+func _is_control_blocked() -> bool:
+	return input_locked or GameManager.is_game_ended or GameManager.is_transitioning or GameManager.is_dialogue_open or GameManager.is_journal_open or get_tree().paused
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if GameManager.is_game_ended or get_tree().paused:
+	if _is_control_blocked():
 		return
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F:
-		_auto_run = not _auto_run
-		var msg := "Continuous Auto-Run ON (Steer with Mouse / A-D, S to Stop)" if _auto_run else "Auto-Run OFF"
-		GameManager.notification_posted.emit(msg, Color(0.55, 0.96, 0.88))
-		return
-	if event.is_action_pressed("compass_pulse"):
-		_trigger_golden_compass_pulse(true)
-		return
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_target_zoom = clampf(_target_zoom - 0.65, 3.6, 13.5)
-			return
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_target_zoom = clampf(_target_zoom + 0.65, 3.6, 13.5)
-			return
-		if Input.get_mouse_mode() != Input.MOUSE_MODE_CAPTURED:
-			Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
-			return
+
 	if event is InputEventMouseMotion and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
-		var sens := GameManager.mouse_sensitivity if GameManager.mouse_sensitivity > 0.0 else mouse_sensitivity
-		cam_yaw.rotate_y(-event.relative.x * sens)
-		cam_pitch.rotation.x = clampf(cam_pitch.rotation.x - event.relative.y * sens, deg_to_rad(-55.0), deg_to_rad(18.0))
+		var sens: float = GameManager.mouse_sensitivity if GameManager.mouse_sensitivity > 0.0 else mouse_sensitivity
+		var mm: InputEventMouseMotion = event as InputEventMouseMotion
+		cam_yaw.rotate_y(-mm.relative.x * sens)
+		var next_pitch: float = clampf(cam_pitch.rotation.x - mm.relative.y * sens, deg_to_rad(-52.0), deg_to_rad(28.0))
+		cam_pitch.rotation.x = next_pitch
+		return
+
+	if event is InputEventMouseButton:
+		var mb: InputEventMouseButton = event as InputEventMouseButton
+		if mb.pressed:
+			if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
+				_target_zoom = clampf(_target_zoom - 0.7, 4.2, 11.5)
+				return
+			elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+				_target_zoom = clampf(_target_zoom + 0.7, 4.2, 11.5)
+				return
+			elif Input.get_mouse_mode() != Input.MOUSE_MODE_CAPTURED:
+				if mb.button_index == MOUSE_BUTTON_LEFT or mb.button_index == MOUSE_BUTTON_RIGHT:
+					GameManager.set_gameplay_mouse()
+					return
+
+	if event.is_action_pressed("jump") and allow_jump:
+		jump_buffer_timer = jump_buffer_time
+	elif event.is_action_pressed("attack"):
+		_request_melee_attack()
+	elif event.is_action_pressed("ranged_attack"):
+		_trigger_golden_arc()
+	elif event.is_action_pressed("dash") or event.is_action_pressed("dodge"):
+		_try_dash()
+	elif event.is_action_pressed("interact"):
+		_try_interact()
+	elif event.is_action_pressed("compass_pulse"):
+		_trigger_compass_pulse()
+	elif event.is_action_pressed("heal"):
+		_try_use_healing_herb()
 
 
 func _physics_process(delta: float) -> void:
-	if GameManager.is_game_ended:
+	# Always update compass needle & HUD target even if idle/dialogue
+	_update_compass_tracking(delta)
+
+	# Failsafe fall recovery (Y < -20m)
+	if global_position.y < -20.0 and not GameManager.is_game_ended and not GameManager.is_transitioning:
+		_trigger_fall_failsafe()
 		return
 
-	_anim_t += delta
-	if lantern_light:
-		var boost := 1.4 if is_dashing else 0.0
-		lantern_light.light_energy = _base_lantern_energy + boost + sin(_anim_t * 6.5) * 0.16 + sin(_anim_t * 14.0) * 0.08
-	if spring_arm:
-		spring_arm.spring_length = lerpf(spring_arm.spring_length, _target_zoom, 9.5 * delta)
+	# Passive Compass Energy regeneration (+8/sec)
+	if not GameManager.is_game_ended and not get_tree().paused:
+		GameManager.modify_compass_energy(8.0 * delta)
 
+	# Cooldowns
 	if _dash_cooldown > 0.0:
 		_dash_cooldown = maxf(_dash_cooldown - delta, 0.0)
-		GameManager.dash_cooldown_changed.emit(1.0 - (_dash_cooldown / dash_cooldown_time))
+		GameManager.dash_cooldown_changed.emit(clampf(1.0 - (_dash_cooldown / dash_cooldown_time), 0.0, 1.0))
+	if _compass_pulse_cd > 0.0:
+		_compass_pulse_cd = maxf(_compass_pulse_cd - delta, 0.0)
+		GameManager.compass_pulse_cooldown_changed.emit(clampf(1.0 - (_compass_pulse_cd / _compass_pulse_max_cd), 0.0, 1.0))
+	if _ranged_cooldown > 0.0:
+		_ranged_cooldown = maxf(_ranged_cooldown - delta, 0.0)
 	if _attack_buffer_timer > 0.0:
 		_attack_buffer_timer = maxf(_attack_buffer_timer - delta, 0.0)
 	if _combo_reset_timer > 0.0:
 		_combo_reset_timer = maxf(_combo_reset_timer - delta, 0.0)
-		if _combo_reset_timer <= 0.0 and not is_attacking:
+		if _combo_reset_timer <= 0.0:
 			_combo_step = 0
 
-	var cam_turn := Input.get_axis("cam_right", "cam_left")
-	if cam_turn != 0.0:
-		cam_yaw.rotate_y(cam_turn * key_turn_speed * delta)
+	# Camera smooth zoom & dash FOV kick
+	if spring_arm:
+		spring_arm.spring_length = lerpf(spring_arm.spring_length, _target_zoom, clampf(delta * 10.0, 0.0, 1.0))
+	if cam:
+		var want_fov: float = 72.0 if is_dashing else _target_fov
+		cam.fov = lerpf(cam.fov, want_fov, clampf(delta * 12.0, 0.0, 1.0))
 
-	var on_floor_now := is_on_floor()
-	if on_floor_now and not _was_on_floor:
-		_on_landed()
+	if _is_control_blocked():
+		velocity.x = move_toward(velocity.x, 0.0, ground_friction * delta)
+		velocity.z = move_toward(velocity.z, 0.0, ground_friction * delta)
+		if not is_on_floor():
+			velocity.y = maxf(velocity.y - gravity_value * delta, -max_fall_speed)
+		move_and_slide()
+		_update_interact_scanner(delta, true)
+		_animate_character(delta)
+		return
+
+	# Scan nearby interactables for floating [E] prompt
+	_update_interact_scanner(delta, false)
+
+	# Floor / Coyote / Double Jump tracking
+	var on_floor_now: bool = is_on_floor()
+	if on_floor_now:
+		if not _was_on_floor and velocity.y < -4.0:
+			if AudioManager:
+				AudioManager.play_sfx("jump", 0.8, -5.0)
+			if footstep_dust:
+				footstep_dust.restart()
+				footstep_dust.emitting = true
+		coyote_timer = coyote_time
+		_air_jumps_left = 1
+	else:
+		coyote_timer = maxf(coyote_timer - delta, 0.0)
 	_was_on_floor = on_floor_now
 
-	_apply_gravity(delta, on_floor_now)
+	# Jump buffer consumption (Ground/Coyote Jump or Double Jump)
+	if jump_buffer_timer > 0.0:
+		jump_buffer_timer = maxf(jump_buffer_timer - delta, 0.0)
+		if allow_jump:
+			if coyote_timer > 0.0:
+				velocity.y = jump_velocity
+				coyote_timer = 0.0
+				jump_buffer_timer = 0.0
+				if AudioManager:
+					AudioManager.play_sfx("jump", 1.02)
+				if footstep_dust:
+					footstep_dust.restart()
+					footstep_dust.emitting = true
+			elif _air_jumps_left > 0 and not on_floor_now:
+				_air_jumps_left -= 1
+				velocity.y = double_jump_velocity
+				jump_buffer_timer = 0.0
+				if AudioManager:
+					AudioManager.play_sfx("jump", 1.24)
+				_spawn_ring_burst(global_position + Vector3(0.0, 0.25, 0.0), Color(1.0, 0.88, 0.42), 1.4, 0.28)
+
+	# Gravity
+	if not is_on_floor():
+		var g_mult: float = fall_gravity_mult if velocity.y < 0.0 else 1.0
+		velocity.y = maxf(velocity.y - gravity_value * g_mult * delta, -max_fall_speed)
+
+	# Directional Movement relative to CameraYaw
+	var move_input: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
+	var cam_fwd: Vector3 = -cam_yaw.global_transform.basis.z
+	cam_fwd.y = 0.0
+	cam_fwd = cam_fwd.normalized() if cam_fwd.length_squared() > 0.001 else Vector3.FORWARD
+	var cam_right: Vector3 = cam_yaw.global_transform.basis.x
+	cam_right.y = 0.0
+	cam_right = cam_right.normalized() if cam_right.length_squared() > 0.001 else Vector3.RIGHT
+
+	var move_dir: Vector3 = (cam_right * move_input.x - cam_fwd * move_input.y)
+	if move_dir.length_squared() > 1.0:
+		move_dir = move_dir.normalized()
 
 	if is_dashing:
 		_dash_timer -= delta
@@ -184,535 +297,501 @@ func _physics_process(delta: float) -> void:
 		velocity.z = _dash_dir.z * dash_speed
 		if _dash_timer <= 0.0:
 			is_dashing = false
-	elif not input_locked:
-		if allow_jump:
-			_handle_jump(delta)
-		_handle_horizontal(delta, on_floor_now)
-		if Input.is_action_just_pressed("dodge") and _dash_cooldown <= 0.0:
-			_perform_dash()
-		if Input.is_action_just_pressed("attack"):
-			_attack_buffer_timer = 0.18
-		if _attack_buffer_timer > 0.0 and not is_attacking:
-			_attack_buffer_timer = 0.0
-			_perform_attack()
 	else:
-		velocity.x = move_toward(velocity.x, 0.0, ground_friction * delta)
-		velocity.z = move_toward(velocity.z, 0.0, ground_friction * delta)
-
-	if cam:
-		var is_sprinting := Input.is_action_pressed("sprint") and Vector2(velocity.x, velocity.z).length() > walk_speed * 0.9
-		var desired_fov := 72.0 if is_dashing else (68.5 if is_sprinting else 64.0)
-		cam.fov = lerpf(cam.fov, desired_fov, 7.5 * delta)
+		var target_speed: float = sprint_speed if Input.is_action_pressed("sprint") else walk_speed
+		if is_attacking:
+			target_speed *= 0.48
+		var accel: float = ground_accel if on_floor_now else air_accel
+		var fric: float = ground_friction if on_floor_now else air_friction
+		if move_dir.length_squared() > 0.01:
+			velocity.x = move_toward(velocity.x, move_dir.x * target_speed, accel * delta)
+			velocity.z = move_toward(velocity.z, move_dir.z * target_speed, accel * delta)
+			var target_yaw: float = atan2(-move_dir.x, -move_dir.z)
+			visual_rig.rotation.y = lerp_angle(visual_rig.rotation.y, target_yaw, clampf(delta * 14.0, 0.0, 1.0))
+		else:
+			velocity.x = move_toward(velocity.x, 0.0, fric * delta)
+			velocity.z = move_toward(velocity.z, 0.0, fric * delta)
 
 	move_and_slide()
-	if _swing_active:
-		_scan_sword_hits()
-	_update_procedural_anim(delta, on_floor_now)
-	_update_golden_compass(delta)
+
+	# Footstep cadence
+	var horiz_speed: float = Vector2(velocity.x, velocity.z).length()
+	if is_on_floor() and horiz_speed > 1.8 and not is_dashing:
+		_step_dist_accum += horiz_speed * delta
+		if _step_dist_accum >= 2.35:
+			_step_dist_accum = 0.0
+			if AudioManager:
+				AudioManager.play_sfx("footstep", randf_range(0.92, 1.12), -9.0)
+
+	# Buffered combo follow-up
+	if not is_attacking and _attack_buffer_timer > 0.0:
+		_attack_buffer_timer = 0.0
+		_perform_melee_attack()
+
+	_animate_character(delta)
 
 
-func _apply_gravity(delta: float, on_floor_now: bool) -> void:
-	if on_floor_now:
-		coyote_timer = coyote_time
+func _animate_character(delta: float) -> void:
+	var hspeed: float = Vector2(velocity.x, velocity.z).length()
+	var speed_norm: float = clampf(hspeed / sprint_speed, 0.0, 1.0)
+	_anim_t += delta * lerpf(2.2, 11.5, speed_norm)
+
+	if _cloak_mat:
+		_cloak_mat.set_shader_parameter("move_speed_norm", clampf(speed_norm + (0.6 if is_dashing else 0.0), 0.0, 1.4))
+
+	if body_pivot:
+		var bob: float = absf(sin(_anim_t)) * 0.08 * speed_norm if is_on_floor() else 0.0
+		body_pivot.position.y = lerpf(body_pivot.position.y, bob, clampf(delta * 16.0, 0.0, 1.0))
+		var yaw_delta: float = angle_difference(_prev_yaw, visual_rig.rotation.y)
+		_prev_yaw = visual_rig.rotation.y
+		var bank: float = clampf(-yaw_delta * 2.2, -0.22, 0.22)
+		body_pivot.rotation.z = lerpf(body_pivot.rotation.z, bank, clampf(delta * 10.0, 0.0, 1.0))
+		body_pivot.rotation.x = lerpf(body_pivot.rotation.x, -0.14 * speed_norm - (0.22 if is_dashing else 0.0), clampf(delta * 10.0, 0.0, 1.0))
+
+	if left_leg and right_leg:
+		var stride: float = sin(_anim_t) * 0.72 * speed_norm if is_on_floor() else 0.35
+		left_leg.rotation.x = lerpf(left_leg.rotation.x, stride, clampf(delta * 14.0, 0.0, 1.0))
+		right_leg.rotation.x = lerpf(right_leg.rotation.x, -stride, clampf(delta * 14.0, 0.0, 1.0))
+		if _l_knee:
+			_l_knee.rotation.x = lerpf(_l_knee.rotation.x, maxf(-stride, 0.0) * 0.7, clampf(delta * 14.0, 0.0, 1.0))
+		if _r_knee:
+			_r_knee.rotation.x = lerpf(_r_knee.rotation.x, maxf(stride, 0.0) * 0.7, clampf(delta * 14.0, 0.0, 1.0))
+
+	if left_arm:
+		left_arm.rotation.x = lerpf(left_arm.rotation.x, 0.22 - sin(_anim_t) * 0.28 * speed_norm, clampf(delta * 12.0, 0.0, 1.0))
+	if _lantern_swing:
+		_lantern_swing.rotation.x = sin(_anim_t * 0.85) * 0.16 * (0.25 + speed_norm)
+		_lantern_swing.rotation.z = cos(_anim_t * 0.65) * 0.1 * (0.25 + speed_norm)
+
+	if right_arm and not is_attacking:
+		right_arm.rotation.x = lerpf(right_arm.rotation.x, -0.15 + sin(_anim_t) * 0.35 * speed_norm, clampf(delta * 12.0, 0.0, 1.0))
+		right_arm.rotation.y = lerpf(right_arm.rotation.y, 0.0, clampf(delta * 12.0, 0.0, 1.0))
+
+	if cloak_pivot:
+		var cloak_lift: float = 0.28 + speed_norm * 0.42 + (0.38 if is_dashing else 0.0) + (0.24 if not is_on_floor() else 0.0)
+		cloak_pivot.rotation.x = lerpf(cloak_pivot.rotation.x, cloak_lift, clampf(delta * 8.0, 0.0, 1.0))
+
+
+# ==============================================================================
+# COMBAT — 3-HIT MELEE COMBO & GOLDEN COMPASS ARC RANGED WAVE
+# ==============================================================================
+func _request_melee_attack() -> void:
+	if is_attacking:
+		_attack_buffer_timer = 0.24
 		return
-	var mult := fall_gravity_mult if velocity.y < 0.0 else 1.0
-	velocity.y = maxf(velocity.y - gravity_value * mult * delta, -max_fall_speed)
-	coyote_timer -= delta
+	_perform_melee_attack()
 
 
-func _handle_jump(delta: float) -> void:
-	if Input.is_action_just_pressed("jump"):
-		jump_buffer_timer = jump_buffer_time
+func _perform_melee_attack() -> void:
+	is_attacking = true
+	_swing_active = true
+	_hit_this_swing.clear()
+	_combo_step = (_combo_step % 3) + 1
+	_combo_reset_timer = 0.95
+
+	var base_dmg: int = maxi(GameManager.attack_damage, 12)
+	var mult: float = 1.0
+	var sfx_name: String = "sword_1"
+	var arc_color: Color = Color(0.55, 0.95, 1.0, 0.86)
+	if _combo_step == 2:
+		mult = 1.18
+		sfx_name = "sword_2"
+		arc_color = Color(0.75, 0.96, 1.0, 0.9)
+	elif _combo_step == 3:
+		mult = 1.65
+		sfx_name = "sword_3"
+		arc_color = Color(1.0, 0.86, 0.34, 0.95)
+
+	_swing_damage = int(round(float(base_dmg) * mult))
+
+	# Snap facing toward camera forward if standing still
+	var fwd: Vector3 = -visual_rig.global_transform.basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized() if fwd.length_squared() > 0.001 else Vector3.FORWARD
+	velocity.x += fwd.x * (6.5 if _combo_step == 3 else 3.8)
+	velocity.z += fwd.z * (6.5 if _combo_step == 3 else 3.8)
+
+	if AudioManager:
+		AudioManager.play_sfx(sfx_name)
+
+	if attack_area:
+		attack_area.monitoring = true
+		# Also immediately check overlapping bodies in case enemy is already inside hitbox
+		for b in attack_area.get_overlapping_bodies():
+			_on_attack_hit(b)
+
+	if slash_arc:
+		slash_arc.visible = true
+		slash_arc.scale = Vector3(1.15, 0.22, 1.15) * (1.28 if _combo_step == 3 else 1.0)
+		slash_arc.rotation = Vector3(0.0, deg_to_rad(-42.0 if _combo_step == 1 else (42.0 if _combo_step == 2 else 0.0)), deg_to_rad(14.0 if _combo_step == 2 else -14.0))
+		if _slash_mat:
+			_slash_mat.albedo_color = arc_color
+			_slash_mat.emission = Color(arc_color.r, arc_color.g, arc_color.b, 1.0)
+			_slash_mat.emission_energy_multiplier = 3.2 if _combo_step == 3 else 2.4
+
+	if right_arm:
+		var tw: Tween = create_tween()
+		var swing_y: float = -1.35 if _combo_step == 2 else 1.35
+		tw.tween_property(right_arm, "rotation", Vector3(deg_to_rad(72.0), swing_y, 0.0), 0.09)
+		tw.tween_property(right_arm, "rotation", Vector3(deg_to_rad(-18.0), -swing_y * 0.4, 0.0), 0.14)
+
+	var active_time: float = 0.20 if _combo_step == 3 else 0.16
+	var recov_time: float = 0.16 if _combo_step == 3 else 0.11
+	await get_tree().create_timer(active_time).timeout
+	_swing_active = false
+	if attack_area:
+		attack_area.monitoring = false
+	if slash_arc:
+		slash_arc.visible = false
+	await get_tree().create_timer(recov_time).timeout
+	is_attacking = false
+
+
+func _on_attack_area_hit(area: Area3D) -> void:
+	if area and area.get_parent() is Node3D:
+		_on_attack_hit(area.get_parent() as Node3D)
+
+
+func _on_attack_hit(body: Node3D) -> void:
+	if not _swing_active or body == null or body == self:
+		return
+	if body in _hit_this_swing:
+		return
+	if body.has_method("take_damage"):
+		_hit_this_swing.append(body)
+		var dir: Vector3 = (body.global_position - global_position)
+		dir.y = 0.0
+		dir = dir.normalized() if dir.length_squared() > 0.001 else -visual_rig.global_transform.basis.z
+		body.take_damage(_swing_damage, dir * (11.0 if _combo_step == 3 else 7.5))
+		GameManager.modify_compass_energy(12.0)
+		if AudioManager:
+			AudioManager.play_sfx("hit_impact", 1.1 if _combo_step == 3 else 1.0)
+		if hit_sparks:
+			hit_sparks.restart()
+			hit_sparks.emitting = true
+		_camera_shake(0.18 if _combo_step == 3 else 0.09, 0.14)
+		_trigger_hitstop(0.04)
+
+
+func _trigger_golden_arc() -> void:
+	if _ranged_cooldown > 0.0 or is_attacking:
+		return
+	if not GameManager.consume_compass_energy(25.0):
+		GameManager.post_toast("LOW COMPASS ENERGY", "Strike foes or wait briefly to recharge (25 Energy needed)", Color(0.95, 0.65, 0.35))
+		return
+
+	_ranged_cooldown = 0.45
+	var fwd: Vector3 = -cam_yaw.global_transform.basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized() if fwd.length_squared() > 0.001 else -visual_rig.global_transform.basis.z
+	visual_rig.rotation.y = atan2(-fwd.x, -fwd.z)
+
+	var proj: Area3D = Area3D.new()
+	proj.set_script(GOLDEN_ARC_SCRIPT)
+	proj.set("direction", fwd)
+	proj.set("damage", int(round(float(GameManager.attack_damage) * 1.45)))
+	proj.global_position = global_position + Vector3(0.0, 1.25, 0.0) + fwd * 1.15
+	get_tree().current_scene.add_child(proj)
+
+	if AudioManager:
+		AudioManager.play_sfx("golden_arc")
+	_camera_shake(0.1, 0.1)
+
+
+func _try_dash() -> void:
+	if is_dashing or _dash_cooldown > 0.0:
+		return
+	var move_input: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
+	var cam_fwd: Vector3 = -cam_yaw.global_transform.basis.z
+	cam_fwd.y = 0.0
+	cam_fwd = cam_fwd.normalized() if cam_fwd.length_squared() > 0.001 else Vector3.FORWARD
+	var cam_right: Vector3 = cam_yaw.global_transform.basis.x
+	cam_right.y = 0.0
+	cam_right = cam_right.normalized() if cam_right.length_squared() > 0.001 else Vector3.RIGHT
+
+	var d: Vector3 = cam_right * move_input.x - cam_fwd * move_input.y
+	if d.length_squared() > 0.01:
+		_dash_dir = d.normalized()
 	else:
-		jump_buffer_timer -= delta
+		_dash_dir = -visual_rig.global_transform.basis.z
+		_dash_dir.y = 0.0
+		_dash_dir = _dash_dir.normalized() if _dash_dir.length_squared() > 0.001 else Vector3.FORWARD
 
-	if jump_buffer_timer > 0.0 and coyote_timer > 0.0:
-		velocity.y = jump_velocity
-		jump_buffer_timer = 0.0
-		coyote_timer = 0.0
-		_play_sfx(jump_sfx, 0.96, 1.06)
-		_squash_stretch(Vector3(0.84, 1.2, 0.84))
-		if footstep_dust:
-			footstep_dust.restart()
-			footstep_dust.emitting = true
-
-	if Input.is_action_just_released("jump") and velocity.y > 4.5:
-		velocity.y *= 0.52
-
-
-func _get_camera_move_dir() -> Vector3:
-	var input_vec := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	if _auto_run:
-		if input_vec.y > 0.35:
-			_auto_run = false
-		elif input_vec.y >= -0.1:
-			input_vec.y = -1.0
-	var basis := cam_yaw.global_transform.basis
-	var forward := -basis.z
-	forward.y = 0.0
-	forward = forward.normalized()
-	var right := basis.x
-	right.y = 0.0
-	right = right.normalized()
-	var move_dir := (right * input_vec.x - forward * input_vec.y)
-	if move_dir.length() > 1.0:
-		move_dir = move_dir.normalized()
-	return move_dir
-
-
-func _handle_horizontal(delta: float, on_floor_now: bool) -> void:
-	var move_dir := _get_camera_move_dir()
-	var target_speed := sprint_speed if Input.is_action_pressed("sprint") else walk_speed
-	var accel := ground_accel if on_floor_now else air_accel
-	var fric := ground_friction if on_floor_now else air_friction
-
-	if move_dir.length() > 0.05:
-		velocity.x = move_toward(velocity.x, move_dir.x * target_speed, accel * delta)
-		velocity.z = move_toward(velocity.z, move_dir.z * target_speed, accel * delta)
-		var target_yaw := atan2(-move_dir.x, -move_dir.z)
-		visual_rig.rotation.y = lerp_angle(visual_rig.rotation.y, target_yaw, 14.0 * delta)
-	else:
-		velocity.x = move_toward(velocity.x, 0.0, fric * delta)
-		velocity.z = move_toward(velocity.z, 0.0, fric * delta)
-
-
-func _perform_dash() -> void:
-	var move_dir := _get_camera_move_dir()
-	if move_dir.length() < 0.05:
-		move_dir = -visual_rig.global_transform.basis.z
-		move_dir.y = 0.0
-		move_dir = move_dir.normalized()
-	_dash_dir = move_dir
-	visual_rig.rotation.y = atan2(-move_dir.x, -move_dir.z)
+	visual_rig.rotation.y = atan2(-_dash_dir.x, -_dash_dir.z)
 	is_dashing = true
 	_dash_timer = dash_duration
 	_dash_cooldown = dash_cooldown_time
 	GameManager.dash_cooldown_changed.emit(0.0)
-	_play_sfx(dash_sfx, 0.94, 1.08)
-	_squash_stretch(Vector3(0.8, 0.88, 1.28))
-	if footstep_dust:
-		footstep_dust.restart()
-		footstep_dust.emitting = true
+
+	if AudioManager:
+		AudioManager.play_sfx("dash")
+	_spawn_ring_burst(global_position + Vector3(0.0, 0.5, 0.0), Color(0.55, 0.96, 1.0), 1.8, 0.25)
+	_grant_dash_iframes(0.35)
 
 
-func _on_landed() -> void:
-	_play_sfx(land_sfx, 0.92, 1.08)
-	_squash_stretch(Vector3(1.18, 0.82, 1.18))
-	if footstep_dust:
-		footstep_dust.restart()
-		footstep_dust.emitting = true
+func _grant_dash_iframes(duration: float) -> void:
+	is_invincible = true
+	await get_tree().create_timer(duration).timeout
+	is_invincible = false
 
 
-func _squash_stretch(target_scale: Vector3) -> void:
-	if not body_pivot:
+# ==============================================================================
+# INTERACT [E] & HEALING HERB [H]
+# ==============================================================================
+func _update_interact_scanner(delta: float, force_hide: bool) -> void:
+	if force_hide:
+		if _last_prompt_visible:
+			_last_prompt_visible = false
+			_last_prompt_text = ""
+			GameManager.interact_prompt_changed.emit(false, "")
 		return
-	body_pivot.scale = target_scale
-	var tw := create_tween()
-	tw.tween_property(body_pivot, "scale", Vector3.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
+	_interact_scan_accum += delta
+	if _interact_scan_accum < 0.08:
+		return
+	_interact_scan_accum = 0.0
 
-func _aim_rig_for_attack() -> void:
-	var cam_fwd := -cam_yaw.global_transform.basis.z
-	cam_fwd.y = 0.0
-	if cam_fwd.length() > 0.01:
-		cam_fwd = cam_fwd.normalized()
+	var best: Node3D = null
+	var best_d: float = 3.7 * 3.7
+	for n_var in get_tree().get_nodes_in_group("interactable"):
+		var n: Node3D = n_var as Node3D
+		if not n or not is_instance_valid(n) or not n.is_inside_tree():
+			continue
+		if n.has_method("can_interact") and not bool(n.can_interact()):
+			continue
+		var d_sq: float = global_position.distance_squared_to(n.global_position)
+		if d_sq < best_d:
+			best_d = d_sq
+			best = n
+
+	_nearest_interactable = best
+	if best:
+		var prompt: String = "[E] Interact"
+		if best.has_method("get_interact_prompt"):
+			prompt = String(best.get_interact_prompt())
+		if not _last_prompt_visible or _last_prompt_text != prompt:
+			_last_prompt_visible = true
+			_last_prompt_text = prompt
+			GameManager.interact_prompt_changed.emit(true, prompt)
 	else:
-		cam_fwd = -visual_rig.global_transform.basis.z
+		if _last_prompt_visible:
+			_last_prompt_visible = false
+			_last_prompt_text = ""
+			GameManager.interact_prompt_changed.emit(false, "")
 
-	var best_enemy: Node3D = null
-	var best_score := -999.0
-	for e_var in get_tree().get_nodes_in_group("enemies"):
-		var enemy := e_var as Node3D
-		if not enemy or not is_instance_valid(enemy):
-			continue
-		if ("state" in enemy and int(enemy.get("state")) == 2) or ("is_defeated" in enemy and bool(enemy.get("is_defeated"))):
-			continue
-		var flat := enemy.global_position - global_position
-		flat.y = 0.0
-		var dist := flat.length()
-		if dist > 5.0 or dist < 0.05:
-			continue
-		var dir := flat / dist
-		var dot_cam := cam_fwd.dot(dir)
-		if dot_cam < 0.15 and dist > 2.4:
-			continue
-		var score := dot_cam * 2.2 - dist * 0.25
-		if score > best_score:
-			best_score = score
-			best_enemy = enemy
 
-	var aim_dir := cam_fwd
-	if best_enemy:
-		var to_e := best_enemy.global_position - global_position
-		to_e.y = 0.0
-		if to_e.length() > 0.05:
-			aim_dir = to_e.normalized()
+func _try_interact() -> void:
+	if _nearest_interactable and is_instance_valid(_nearest_interactable) and _nearest_interactable.has_method("interact"):
+		_nearest_interactable.interact(self)
+
+
+func _try_use_healing_herb() -> void:
+	if GameManager.use_healing_herb():
+		if AudioManager:
+			AudioManager.play_sfx("heal")
+		_spawn_ring_burst(global_position + Vector3(0.0, 0.85, 0.0), Color(0.32, 0.98, 0.56), 2.4, 0.45)
+		GameManager.post_toast("HEALING HERB USED", "+2 Vitality restored", Color(0.42, 0.96, 0.62))
+	elif GameManager.healing_herbs <= 0:
+		GameManager.post_toast("NO HEALING HERBS", "Open hidden chests to gather more herbs", Color(0.95, 0.65, 0.35))
 	else:
-		var move_dir := _get_camera_move_dir()
-		if move_dir.length() > 0.1:
-			aim_dir = move_dir.normalized()
-
-	visual_rig.rotation.y = atan2(-aim_dir.x, -aim_dir.z)
+		GameManager.post_toast("VITALITY FULL", "Your health is already at maximum", Color(0.65, 0.92, 0.85))
 
 
-func _perform_attack() -> void:
-	is_attacking = true
-	_swing_active = true
-	_hit_this_swing.clear()
-	_aim_rig_for_attack()
+# ==============================================================================
+# GOLDEN COMPASS PULSE [G] & LIVE OBJECTIVE TRACKING
+# ==============================================================================
+func _update_compass_tracking(delta: float) -> void:
+	_compass_ui_accum += delta
+	if _compass_ui_accum < 0.06:
+		return
+	_compass_ui_accum = 0.0
 
-	var step_idx := _combo_step
-	_combo_step = (_combo_step + 1) % 3
-	_combo_reset_timer = 0.9
-	var is_finisher := (step_idx == 2)
-	_swing_damage = 2 if is_finisher else 1
+	var target_info: Dictionary = QuestManager.get_active_compass_target(global_position)
+	var tgt_pos: Vector3 = target_info.get("position", global_position + Vector3(0.0, 0.0, -50.0))
+	var label: String = String(target_info.get("label", "Northern Trail"))
 
-	_play_sfx(swing_sfx, 0.92 if step_idx == 0 else (1.05 if step_idx == 1 else 0.82), 1.04 if step_idx == 0 else (1.18 if step_idx == 1 else 0.92))
-	attack_area.monitoring = true
+	var to_tgt: Vector3 = tgt_pos - global_position
+	var dist_m: float = Vector2(to_tgt.x, to_tgt.z).length()
+	var world_angle: float = atan2(to_tgt.x, -to_tgt.z)
+	var cam_heading: float = -cam_yaw.rotation.y
+	var rel_angle: float = wrapf(world_angle - cam_heading, -PI, PI)
 
-	var lunge_dir := -visual_rig.global_transform.basis.z
-	lunge_dir.y = 0.0
-	if lunge_dir.length() > 0.01:
-		lunge_dir = lunge_dir.normalized()
-	var lunge_spd := 6.4 if is_finisher else 4.6
-	velocity.x += lunge_dir.x * lunge_spd
-	velocity.z += lunge_dir.z * lunge_spd
+	if _compass_needle:
+		var rig_rel: float = wrapf(world_angle + visual_rig.rotation.y, -PI, PI)
+		_compass_needle.rotation.y = lerp_angle(_compass_needle.rotation.y, -rig_rel, 0.25)
 
-	var a_start := deg_to_rad(-68.0) if step_idx == 0 else (deg_to_rad(70.0) if step_idx == 1 else deg_to_rad(-82.0))
-	var a_end := deg_to_rad(76.0) if step_idx == 0 else (deg_to_rad(-72.0) if step_idx == 1 else deg_to_rad(88.0))
+	GameManager.compass_updated.emit(rel_angle, dist_m, label)
 
+
+func _trigger_compass_pulse() -> void:
+	if _compass_pulse_cd > 0.0:
+		return
+	_compass_pulse_cd = _compass_pulse_max_cd
+	GameManager.compass_pulse_cooldown_changed.emit(0.0)
+
+	if AudioManager:
+		AudioManager.play_sfx("compass_pulse")
+	_camera_shake(0.14, 0.22)
+
+	# 1. Expanding golden shockwave ring from Explorer
+	_spawn_ring_burst(global_position + Vector3(0.0, 0.28, 0.0), Color(1.0, 0.88, 0.36), 18.0, 0.85)
+
+	# 2. Lantern flare surge
+	if lantern_light:
+		var tw: Tween = create_tween()
+		tw.tween_property(lantern_light, "light_energy", _base_lantern_energy * 2.6, 0.14)
+		tw.tween_property(lantern_light, "light_energy", _base_lantern_energy, 0.55)
+
+	# 3. 16 Glowing golden firefly orbs flowing toward active quest target
+	var target_info: Dictionary = QuestManager.get_active_compass_target(global_position)
+	var tgt_pos: Vector3 = target_info.get("position", global_position + Vector3(0.0, 0.0, -40.0))
+	_spawn_compass_trail_orbs(tgt_pos)
+
+	# 4. Highlight chests, shards, traps, lore runestones within 45m for 10s
+	for grp in ["chest", "shard", "trap", "lore_runestone", "rune_pillar"]:
+		for n_var in get_tree().get_nodes_in_group(grp):
+			var n: Node3D = n_var as Node3D
+			if n and is_instance_valid(n) and global_position.distance_to(n.global_position) <= 45.0:
+				if n.has_method("highlight_compass_beacon"):
+					n.highlight_compass_beacon(10.0)
+
+	# 5. Stage 4: Illuminate hidden Astral Light Bridges within 28m
+	for b_var in get_tree().get_nodes_in_group("astral_bridge"):
+		var bridge: Node3D = b_var as Node3D
+		if bridge and is_instance_valid(bridge) and global_position.distance_to(bridge.global_position) <= 28.0:
+			if bridge.has_method("illuminate_by_compass"):
+				bridge.illuminate_by_compass()
+
+	# 6. Stage 4 Final Boss: Shatter Aurelius's Astral Aegis Shield within 38m
+	for boss_var in get_tree().get_nodes_in_group("astral_boss"):
+		var boss: Node3D = boss_var as Node3D
+		if boss and is_instance_valid(boss) and global_position.distance_to(boss.global_position) <= 38.0:
+			if boss.has_method("shatter_shield_by_compass"):
+				boss.shatter_shield_by_compass()
+
+
+func _spawn_compass_trail_orbs(target_pos: Vector3) -> void:
+	var start_pos: Vector3 = global_position + Vector3(0.0, 1.35, 0.0)
+	var dir: Vector3 = target_pos - start_pos
+	var dist: float = clampf(dir.length(), 6.0, 34.0)
+	var flat_dir: Vector3 = dir.normalized() if dir.length_squared() > 0.01 else Vector3.FORWARD
+	var side_vec: Vector3 = flat_dir.cross(Vector3.UP).normalized()
+	if side_vec.length_squared() < 0.01:
+		side_vec = Vector3.RIGHT
+
+	for i in 16:
+		var t: float = float(i + 1) / 16.0
+		var orb: MeshInstance3D = MeshInstance3D.new()
+		orb.mesh = _compass_mote_mesh
+		orb.material_override = _compass_mote_mat
+		orb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		get_tree().current_scene.add_child(orb)
+		orb.global_position = start_pos
+
+		var end_p: Vector3 = start_pos + flat_dir * (dist * t)
+		end_p.y = lerpf(start_pos.y, target_pos.y + 1.4, t) + sin(t * PI) * 2.2
+		end_p += side_vec * sin(float(i) * 0.9) * 0.85
+
+		var tw: Tween = orb.create_tween()
+		tw.tween_interval(float(i) * 0.035)
+		tw.tween_property(orb, "global_position", end_p, 0.72 + t * 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(orb, "scale", Vector3(1.25, 1.25, 1.25), 0.35)
+		tw.tween_property(orb, "scale", Vector3(0.01, 0.01, 0.01), 0.35)
+		tw.tween_callback(orb.queue_free)
+
+
+func _spawn_ring_burst(center: Vector3, col: Color, max_radius: float, duration: float) -> void:
+	var ring: MeshInstance3D = MeshInstance3D.new()
+	var tm: TorusMesh = TorusMesh.new()
+	tm.inner_radius = 0.82
+	tm.outer_radius = 1.0
+	tm.rings = 24
+	tm.ring_segments = 10
+	ring.mesh = tm
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(col.r, col.g, col.b, 0.85)
+	mat.emission_enabled = true
+	mat.emission = col
+	mat.emission_energy_multiplier = 3.2
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	ring.material_override = mat
+	get_tree().current_scene.add_child(ring)
+	ring.global_position = center
+	ring.scale = Vector3(0.3, 0.15, 0.3)
+
+	var tw: Tween = ring.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(ring, "scale", Vector3(max_radius, 0.15, max_radius), duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(mat, "albedo_color:a", 0.0, duration)
+	tw.chain().tween_callback(ring.queue_free)
+
+
+# ==============================================================================
+# DAMAGE, HITSTOP, SHAKE & FALL FAILSAFE
+# ==============================================================================
+func take_damage(amount: int, knockback: Vector3 = Vector3.ZERO) -> void:
+	if is_invincible or GameManager.is_game_ended or GameManager.is_transitioning:
+		return
+	is_invincible = true
+	GameManager.damage_player(amount)
+	if AudioManager:
+		AudioManager.play_sfx("player_hurt")
+	_camera_shake(0.24, 0.22)
+
+	if knockback.length_squared() > 0.01:
+		velocity.x = knockback.x
+		velocity.z = knockback.z
+		velocity.y = maxf(velocity.y, 4.8)
+
+	var hud: Node = get_tree().get_first_node_in_group("hud")
+	if hud and hud.has_method("flash_damage_vignette"):
+		hud.flash_damage_vignette()
+
+	# Blink visual rig during 1.0s i-frames
+	var blink_t: float = 0.0
+	while blink_t < 1.0:
+		if not is_inside_tree():
+			return
+		if body_pivot:
+			body_pivot.visible = not body_pivot.visible
+		await get_tree().create_timer(0.1).timeout
+		blink_t += 0.1
 	if body_pivot:
-		var torso_tw := create_tween()
-		body_pivot.rotation.y = -a_start * 0.25
-		torso_tw.tween_property(body_pivot, "rotation:y", -a_end * 0.22, 0.14).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		torso_tw.tween_property(body_pivot, "rotation:y", 0.0, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		body_pivot.visible = true
+	is_invincible = false
 
-	if right_arm:
-		right_arm.rotation = Vector3(deg_to_rad(62.0 if is_finisher else 54.0), a_start * 0.68, 0.0)
-		var rtw := create_tween()
-		rtw.tween_property(right_arm, "rotation:y", a_end * 0.72, 0.16).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	if _r_elbow:
-		_r_elbow.rotation.x = 0.55 if is_finisher else 0.42
 
-	if slash_arc:
-		slash_arc.visible = true
-		slash_arc.rotation.y = a_start
-		slash_arc.scale = Vector3(0.95, 0.22, 0.95) if is_finisher else Vector3(0.88, 0.18, 0.88)
-		if _slash_mat:
-			var col := Color(1.0, 0.92, 0.45, 0.96) if is_finisher else Color(0.55, 0.96, 1.0, 0.92)
-			_slash_mat.albedo_color = col
-			_slash_mat.emission = Color(1.0, 0.85, 0.35, 1.0) if is_finisher else Color(0.45, 0.94, 1.0, 1.0)
-		var end_sc := Vector3(1.52, 0.3, 1.52) if is_finisher else Vector3(1.36, 0.26, 1.36)
-		var stw := create_tween().set_parallel(true)
-		stw.tween_property(slash_arc, "rotation:y", a_end, 0.17).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		stw.tween_property(slash_arc, "scale", end_sc, 0.17).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		if _slash_mat:
-			stw.tween_property(_slash_mat, "albedo_color:a", 0.0, 0.19)
-
-	_scan_sword_hits()
-	await get_tree().create_timer(0.20).timeout
-	if not is_inside_tree():
+func _trigger_fall_failsafe() -> void:
+	GameManager.damage_player(1)
+	if GameManager.is_game_ended:
 		return
-	_swing_active = false
-	attack_area.monitoring = false
-	if slash_arc:
-		slash_arc.visible = false
-	if right_arm:
-		create_tween().tween_property(right_arm, "rotation", Vector3.ZERO, 0.1)
-	await get_tree().create_timer(0.06 if not is_finisher else 0.11).timeout
-	if not is_inside_tree():
+	global_position = GameManager.checkpoint_position + Vector3(0.0, 0.65, 0.0)
+	velocity = Vector3.ZERO
+	GameManager.post_toast("RETURNED TO SAFE GROUND", "Fell into the abyss (-1 Vitality)", Color(1.0, 0.58, 0.36))
+
+
+func _trigger_hitstop(duration: float) -> void:
+	if _hitstop_active:
 		return
-	is_attacking = false
+	_hitstop_active = true
+	Engine.time_scale = 0.08
+	await get_tree().create_timer(duration, true, false, true).timeout
+	Engine.time_scale = 1.0
+	_hitstop_active = false
 
 
-func _scan_sword_hits() -> void:
-	for body in attack_area.get_overlapping_bodies():
-		if body is Node3D:
-			_try_hit_target(body as Node3D)
-
-	var fwd := -visual_rig.global_transform.basis.z
-	fwd.y = 0.0
-	fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
-	var sword_pt := visual_rig.global_position + fwd * 1.55
-
-	for e_var in get_tree().get_nodes_in_group("enemies"):
-		var enemy := e_var as Node3D
-		if not enemy or not is_instance_valid(enemy) or enemy in _hit_this_swing:
-			continue
-		var flat_from_player := enemy.global_position - global_position
-		flat_from_player.y = 0.0
-		var dist_p := flat_from_player.length()
-		if dist_p > 0.2 and fwd.dot(flat_from_player / dist_p) < -0.25 and dist_p > 1.8:
-			continue
-		var hit_r := 2.95 if ("engage_radius" in enemy) else 2.25
-		var max_dy := 3.6 if ("engage_radius" in enemy) else 2.5
-		var flat_d := Vector2(enemy.global_position.x - sword_pt.x, enemy.global_position.z - sword_pt.z).length()
-		if flat_d <= hit_r and absf(enemy.global_position.y - (global_position.y + 1.3)) <= max_dy:
-			_try_hit_target(enemy)
-
-	for o_var in get_tree().get_nodes_in_group("boss_orbs"):
-		var orb := o_var as Node3D
-		if not orb or not is_instance_valid(orb):
-			continue
-		if orb.global_position.distance_to(sword_pt + Vector3(0.0, 1.1, 0.0)) <= 2.35:
-			if orb.has_method("deflect"):
-				orb.deflect()
-				if hit_sparks:
-					hit_sparks.restart()
-					hit_sparks.emitting = true
-
-
-func _on_attack_hit(body: Node3D) -> void:
-	_try_hit_target(body)
-
-
-func _try_hit_target(body: Node3D) -> void:
-	if body in _hit_this_swing:
-		return
-	if body.has_method("take_damage") and not body.is_in_group("player"):
-		_hit_this_swing.append(body)
-		if hit_sparks:
-			hit_sparks.restart()
-			hit_sparks.emitting = true
-		_shake_camera(0.07, 0.09)
-		body.take_damage(_swing_damage, global_position)
-
-
-func _shake_camera(amp: float, duration: float) -> void:
+func _camera_shake(intensity: float, duration: float) -> void:
 	if not cam:
 		return
 	if _shake_tween and _shake_tween.is_valid():
 		_shake_tween.kill()
 	_shake_tween = create_tween()
-	_shake_tween.tween_property(cam, "position", _cam_base_pos + Vector3(randf_range(-amp, amp), randf_range(-amp * 0.75, amp * 0.75), amp * 0.9), duration * 0.4)
-	_shake_tween.tween_property(cam, "position", _cam_base_pos, duration * 0.6)
-
-
-func take_damage(amount: int, source_pos: Vector3) -> void:
-	if is_invincible or is_dashing or GameManager.is_game_ended:
-		return
-	is_invincible = true
-	_play_sfx(hurt_sfx, 0.95, 1.05)
-	GameManager.damage_player(amount)
-
-	var knock := global_position - source_pos
-	knock.y = 0.0
-	if knock.length() < 0.05:
-		knock = -visual_rig.global_transform.basis.z
-	knock = knock.normalized()
-	velocity.x = knock.x * 8.5
-	velocity.z = knock.z * 8.5
-	velocity.y = 2.4
-
-	_shake_camera(0.18, 0.12)
-
-	for i in 4:
-		if not is_inside_tree():
-			return
-		body_pivot.visible = false
-		await get_tree().create_timer(0.09).timeout
-		if not is_inside_tree():
-			return
-		body_pivot.visible = true
-		await get_tree().create_timer(0.09).timeout
-	is_invincible = false
-
-
-func _play_sfx(player_node: AudioStreamPlayer, min_pitch: float, max_pitch: float) -> void:
-	if player_node and player_node.stream:
-		player_node.pitch_scale = randf_range(min_pitch, max_pitch)
-		player_node.play()
-
-
-func _update_procedural_anim(delta: float, on_floor_now: bool) -> void:
-	var h_speed := Vector2(velocity.x, velocity.z).length()
-	var speed_norm := clampf(h_speed / walk_speed, 0.0, 1.45)
-
-	if _cloak_mat:
-		_cloak_mat.set_shader_parameter("move_speed_norm", clampf(h_speed / sprint_speed, 0.0, 1.5))
-
-	# Smooth angular bank tilt when turning cleanly at speed
-	var yaw_delta := wrapf(visual_rig.rotation.y - _prev_yaw, -PI, PI) / maxf(delta, 0.001)
-	_prev_yaw = visual_rig.rotation.y
-	var target_bank := clampf(yaw_delta * 0.045 * clampf(speed_norm, 0.0, 1.0), -0.22, 0.22)
-	body_pivot.rotation.z = lerpf(body_pivot.rotation.z, target_bank, 9.0 * delta)
-
-	if on_floor_now and h_speed > 1.8 and not is_dashing:
-		_step_dist_accum += h_speed * delta
-		if _step_dist_accum >= 2.25:
-			_step_dist_accum = 0.0
-			_play_sfx(footstep_sfx, 0.88, 1.14)
-	else:
-		_step_dist_accum = 0.8
-
-	if not on_floor_now:
-		left_leg.rotation.x = lerpf(left_leg.rotation.x, deg_to_rad(32.0), 10.0 * delta)
-		right_leg.rotation.x = lerpf(right_leg.rotation.x, deg_to_rad(-24.0), 10.0 * delta)
-		if _l_knee:
-			_l_knee.rotation.x = lerpf(_l_knee.rotation.x, deg_to_rad(-38.0), 10.0 * delta)
-		if _r_knee:
-			_r_knee.rotation.x = lerpf(_r_knee.rotation.x, deg_to_rad(-22.0), 10.0 * delta)
-		left_arm.rotation.x = lerpf(left_arm.rotation.x, deg_to_rad(-38.0), 8.0 * delta)
-		if not is_attacking:
-			right_arm.rotation.x = lerpf(right_arm.rotation.x, deg_to_rad(25.0), 8.0 * delta)
-		cloak_pivot.rotation.x = lerpf(cloak_pivot.rotation.x, deg_to_rad(-38.0), 8.0 * delta)
-		body_pivot.rotation.x = lerpf(body_pivot.rotation.x, deg_to_rad(4.0 if velocity.y < 0 else -5.0), 7.0 * delta)
-	elif h_speed > 0.4:
-		var freq := 11.2 * maxf(speed_norm, 0.72)
-		var phase := _anim_t * freq
-		var stride := sin(phase) * 0.66 * clampf(speed_norm, 0.25, 1.35)
-		left_leg.rotation.x = stride
-		right_leg.rotation.x = -stride
-		if _l_knee:
-			_l_knee.rotation.x = -maxf(0.0, -cos(phase)) * 0.92 * clampf(speed_norm, 0.3, 1.25) - 0.12 * clampf(speed_norm, 0.0, 1.0)
-		if _r_knee:
-			_r_knee.rotation.x = -maxf(0.0, cos(phase)) * 0.92 * clampf(speed_norm, 0.3, 1.25) - 0.12 * clampf(speed_norm, 0.0, 1.0)
-		left_arm.rotation.x = -stride * 0.46 + sin(_anim_t * 3.8) * 0.04
-		if _l_elbow:
-			_l_elbow.rotation.x = lerpf(_l_elbow.rotation.x, 0.42 + maxf(0.0, -stride) * 0.45, 10.0 * delta)
-		if not is_attacking:
-			right_arm.rotation.x = stride * 0.45
-			if _r_elbow:
-				_r_elbow.rotation.x = lerpf(_r_elbow.rotation.x, 0.28 + maxf(0.0, stride) * 0.52, 10.0 * delta)
-			body_pivot.rotation.y = lerpf(body_pivot.rotation.y, -stride * 0.09, 10.0 * delta)
-		body_pivot.position.y = absf(cos(phase)) * 0.072 * clampf(speed_norm, 0.0, 1.2)
-		body_pivot.rotation.x = lerpf(body_pivot.rotation.x, deg_to_rad(-8.5 * clampf(speed_norm, 0.0, 1.3)), 8.0 * delta)
-		if head_group:
-			head_group.rotation.x = lerpf(head_group.rotation.x, deg_to_rad(5.5 * clampf(speed_norm, 0.0, 1.2)), 8.0 * delta)
-			head_group.rotation.y = lerpf(head_group.rotation.y, 0.0, 8.0 * delta)
-		cloak_pivot.rotation.x = lerpf(cloak_pivot.rotation.x, deg_to_rad(-16.0 - speed_norm * 22.0), 8.0 * delta)
-	else:
-		var breath := sin(_anim_t * 2.2)
-		left_leg.rotation.x = lerpf(left_leg.rotation.x, 0.0, 10.0 * delta)
-		right_leg.rotation.x = lerpf(right_leg.rotation.x, 0.0, 10.0 * delta)
-		if _l_knee:
-			_l_knee.rotation.x = lerpf(_l_knee.rotation.x, 0.0, 10.0 * delta)
-		if _r_knee:
-			_r_knee.rotation.x = lerpf(_r_knee.rotation.x, 0.0, 10.0 * delta)
-		left_arm.rotation.x = breath * 0.06
-		if _l_elbow:
-			_l_elbow.rotation.x = lerpf(_l_elbow.rotation.x, 0.34 + breath * 0.05, 8.0 * delta)
-		if not is_attacking:
-			right_arm.rotation.x = -breath * 0.05
-			if _r_elbow:
-				_r_elbow.rotation.x = lerpf(_r_elbow.rotation.x, 0.22 - breath * 0.04, 8.0 * delta)
-			body_pivot.rotation.y = lerpf(body_pivot.rotation.y, 0.0, 8.0 * delta)
-		body_pivot.position.y = breath * 0.025
-		body_pivot.rotation.x = lerpf(body_pivot.rotation.x, breath * 0.02, 6.0 * delta)
-		if head_group:
-			head_group.rotation.x = lerpf(head_group.rotation.x, breath * 0.035, 5.0 * delta)
-			head_group.rotation.y = sin(_anim_t * 0.9) * 0.08
-		cloak_pivot.rotation.x = lerpf(cloak_pivot.rotation.x, deg_to_rad(-12.0 + sin(_anim_t * 2.0) * 3.5), 6.0 * delta)
-
-	if _lantern_swing:
-		_lantern_swing.rotation.z = lerpf(_lantern_swing.rotation.z, -target_bank * 1.6 + sin(_anim_t * 3.1) * 0.06, 9.0 * delta)
-		_lantern_swing.rotation.x = lerpf(_lantern_swing.rotation.x, clampf(h_speed * 0.025, 0.0, 0.32) - left_arm.rotation.x * 0.4, 9.0 * delta)
-
-
-func _setup_compass_pulse_assets() -> void:
-	_compass_sfx = AudioStreamPlayer.new()
-	_compass_sfx.stream = preload("res://assets/audio/sfx/secret_chime.wav")
-	_compass_sfx.bus = &"SFX"
-	_compass_sfx.volume_db = -4.0
-	add_child(_compass_sfx)
-
-	_compass_mote_mat = StandardMaterial3D.new()
-	_compass_mote_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_compass_mote_mat.albedo_color = Color(1.0, 0.88, 0.36, 0.95)
-	_compass_mote_mat.emission_enabled = true
-	_compass_mote_mat.emission = Color(1.0, 0.82, 0.24, 1.0)
-	_compass_mote_mat.emission_energy_multiplier = 3.6
-	_compass_mote_mat.roughness = 0.2
-
-	_compass_mote_mesh = SphereMesh.new()
-	_compass_mote_mesh.radius = 0.14
-	_compass_mote_mesh.height = 0.28
-
-	# Automatic subtle trailhead compass guide pulse 1.8s after stage spawn
-	get_tree().create_timer(1.8).timeout.connect(func() -> void:
-		if is_inside_tree() and not GameManager.is_game_ended:
-			_trigger_golden_compass_pulse(false)
-	)
-
-
-func _update_golden_compass(delta: float) -> void:
-	if _compass_pulse_cd > 0.0:
-		_compass_pulse_cd = maxf(_compass_pulse_cd - delta, 0.0)
-	_compass_ui_accum += delta
-	if _compass_ui_accum < 0.05:
-		return
-	_compass_ui_accum = 0.0
-
-	if not _level_ctrl or not is_instance_valid(_level_ctrl):
-		_level_ctrl = get_tree().get_first_node_in_group("level_controller")
-	if not _level_ctrl or not _level_ctrl.has_method("get_compass_target_info"):
-		return
-
-	var info: Dictionary = _level_ctrl.get_compass_target_info()
-	var target_pos: Vector3 = info.get("pos", global_position + Vector3(0.0, 0.0, -100.0))
-	var target_lbl: String = String(info.get("label", "Stage Portal"))
-	var flat_to := Vector3(target_pos.x - global_position.x, 0.0, target_pos.z - global_position.z)
-	var dist_m := flat_to.length()
-	var world_yaw := atan2(-flat_to.x, -flat_to.z) if dist_m > 0.1 else 0.0
-
-	var cam_fwd := -cam_yaw.global_transform.basis.z
-	cam_fwd.y = 0.0
-	var cam_yaw_ang := atan2(-cam_fwd.x, -cam_fwd.z) if cam_fwd.length() > 0.01 else 0.0
-	var rel_angle := wrapf(cam_yaw_ang - world_yaw, -PI, PI)
-
-	if _compass_needle and is_instance_valid(_compass_needle):
-		var body_rel := wrapf(visual_rig.rotation.y - world_yaw, -PI, PI)
-		_compass_needle.rotation.y = lerp_angle(_compass_needle.rotation.y, -body_rel, 0.28)
-
-	GameManager.compass_updated.emit(rel_angle, dist_m, target_lbl)
-
-
-func _trigger_golden_compass_pulse(announce: bool) -> void:
-	if _compass_pulse_cd > 0.0:
-		return
-	_compass_pulse_cd = 2.0
-	if not _level_ctrl or not is_instance_valid(_level_ctrl):
-		_level_ctrl = get_tree().get_first_node_in_group("level_controller")
-	if not _level_ctrl or not _level_ctrl.has_method("get_compass_target_info"):
-		return
-
-	var info: Dictionary = _level_ctrl.get_compass_target_info()
-	var target_pos: Vector3 = info.get("pos", global_position + Vector3(0.0, 0.0, -50.0))
-	var target_lbl: String = String(info.get("label", "Wayshrine"))
-	var dist_m := int(round(global_position.distance_to(target_pos)))
-
-	if announce:
-		if _compass_sfx and _compass_sfx.stream:
-			_compass_sfx.pitch_scale = 1.18
-			_compass_sfx.play()
-		GameManager.notification_posted.emit("Golden Compass Resonates — %s (%d m ahead)" % [target_lbl, dist_m], Color(1.0, 0.88, 0.4))
-
-	var root := get_tree().current_scene
-	if not root:
-		return
-	var use_road := _level_ctrl.has_method("sample_road_point")
-	var start_pt := global_position + Vector3(0.0, 1.35, 0.0)
-	var dir_to := (target_pos - global_position)
-	dir_to.y = 0.0
-	var flat_dir := dir_to.normalized() if dir_to.length() > 0.1 else Vector3.FORWARD
-
-	for i in 12:
-		var step_d := 2.6 + float(i) * 3.1
-		var pt := start_pt + flat_dir * step_d
-		if use_road and target_pos.z < global_position.z:
-			var rz := global_position.z - step_d
-			var rp: Vector3 = _level_ctrl.sample_road_point(rz)
-			pt = Vector3(rp.x, rp.y + 1.25 + sin(float(i) * 0.55) * 0.35, rp.z)
-		var mote := MeshInstance3D.new()
-		mote.mesh = _compass_mote_mesh
-		mote.material_override = _compass_mote_mat
-		mote.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		root.add_child(mote)
-		mote.global_position = start_pt + Vector3(0.0, 0.1, 0.0)
-		mote.scale = Vector3.ONE * 0.15
-		var tw := mote.create_tween().set_parallel(true)
-		var delay := float(i) * 0.055
-		tw.tween_property(mote, "global_position", pt, 0.45).set_delay(delay).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		tw.tween_property(mote, "scale", Vector3.ONE * (1.15 - float(i) * 0.04), 0.3).set_delay(delay)
-		tw.tween_property(mote, "scale", Vector3.ZERO, 0.55).set_delay(delay + 1.65)
-		tw.chain().tween_callback(mote.queue_free)
+	var steps: int = 5
+	for i in steps:
+		var damp: float = 1.0 - (float(i) / float(steps))
+		var offset: Vector3 = Vector3(randf_range(-intensity, intensity) * damp, randf_range(-intensity, intensity) * damp, 0.0)
+		_shake_tween.tween_property(cam, "position", _cam_base_pos + offset, duration / float(steps))
+	_shake_tween.tween_property(cam, "position", _cam_base_pos, 0.05)

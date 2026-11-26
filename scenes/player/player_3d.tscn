@@ -1,16 +1,10 @@
-[gd_scene load_steps=46 format=3 uid="uid://player3d001"]
+[gd_scene load_steps=40 format=3 uid="uid://player3d001"]
 
 [ext_resource type="Script" path="res://scenes/player/player_3d.gd" id="1_script"]
 [ext_resource type="Material" path="res://resources/dust_3d_material.tres" id="2_dustmat"]
 [ext_resource type="Material" path="res://resources/crystal_burst_3d_material.tres" id="3_sparkmat"]
 [ext_resource type="Material" path="res://resources/materials3d/char_cloak.tres" id="4_cloak"]
 [ext_resource type="Material" path="res://resources/materials3d/char_leather.tres" id="5_leather"]
-[ext_resource type="AudioStream" path="res://assets/audio/sfx/jump.wav" id="6_jump"]
-[ext_resource type="AudioStream" path="res://assets/audio/sfx/land.wav" id="7_land"]
-[ext_resource type="AudioStream" path="res://assets/audio/sfx/attack.wav" id="8_atk"]
-[ext_resource type="AudioStream" path="res://assets/audio/sfx/hurt.wav" id="9_hurt"]
-[ext_resource type="AudioStream" path="res://assets/audio/sfx/footstep_moss.wav" id="10_step"]
-[ext_resource type="AudioStream" path="res://assets/audio/sfx/dash_whoosh.wav" id="11_dash"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
 radius = 0.38
@@ -392,6 +386,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.72, 0)
 transform = Transform3D(1, 0, 0, 0, 0.951, 0.309, 0, -0.309, 0.951, 0, 0, 0)
 
 [node name="SpringArm3D" type="SpringArm3D" parent="CameraYaw/CameraPitch"]
+collision_mask = 1
 spring_length = 7.0
 margin = 0.45
 
@@ -410,31 +405,3 @@ one_shot = true
 explosiveness = 0.85
 process_material = ExtResource("2_dustmat")
 draw_pass_1 = SubResource("Mesh_dust")
-
-[node name="Audio" type="Node" parent="."]
-
-[node name="Jump" type="AudioStreamPlayer" parent="Audio"]
-stream = ExtResource("6_jump")
-bus = &"SFX"
-
-[node name="Land" type="AudioStreamPlayer" parent="Audio"]
-stream = ExtResource("7_land")
-bus = &"SFX"
-
-[node name="AttackSwing" type="AudioStreamPlayer" parent="Audio"]
-stream = ExtResource("8_atk")
-bus = &"SFX"
-
-[node name="Hurt" type="AudioStreamPlayer" parent="Audio"]
-stream = ExtResource("9_hurt")
-bus = &"SFX"
-
-[node name="Footstep" type="AudioStreamPlayer" parent="Audio"]
-stream = ExtResource("10_step")
-volume_db = -8.0
-bus = &"SFX"
-
-[node name="Dash" type="AudioStreamPlayer" parent="Audio"]
-stream = ExtResource("11_dash")
-volume_db = -2.0
-bus = &"SFX"

@@ -329,9 +329,12 @@ static func build_crystal_cluster_mesh() -> ArrayMesh:
 		{"pos": Vector3(-0.14, -0.08, 0.08), "rot": Vector3(0.28, 1.1, 0.35), "r": 0.14, "h": 0.48},
 		{"pos": Vector3(0.15, -0.1, -0.06), "rot": Vector3(-0.24, 2.3, -0.32), "r": 0.13, "h": 0.44},
 	]
-	for cfg in spires:
-		var m := build_rune_shard_mesh(float(cfg["r"]), float(cfg["h"]), int(float(cfg["r"]) * 100.0))
-		var xf := Transform3D(Basis.from_euler(cfg["rot"]), cfg["pos"])
+	for cfg_var in spires:
+		var cfg: Dictionary = cfg_var
+		var m: ArrayMesh = build_rune_shard_mesh(float(cfg["r"]), float(cfg["h"]), int(float(cfg["r"]) * 100.0))
+		var rot_v: Vector3 = cfg["rot"]
+		var pos_v: Vector3 = cfg["pos"]
+		var xf: Transform3D = Transform3D(Basis.from_euler(rot_v), pos_v)
 		st.append_from(m, 0, xf)
 	st.generate_normals()
 	st.generate_tangents()
@@ -682,10 +685,10 @@ static func build_road_valley_terrain_mesh(
 		for iz in range(nz + 1):
 			var z := lerpf(z_min, z_max, float(iz) / float(nz))
 			var idx := ix * stride + iz
-			var y_l := ys[(ix - 1) * stride + iz] if ix > 0 else float(terrain_sampler.call(x - dx_step, z)["y"])
-			var y_r := ys[(ix + 1) * stride + iz] if ix < nx else float(terrain_sampler.call(x + dx_step, z)["y"])
-			var y_b := ys[ix * stride + (iz - 1)] if iz > 0 else float(terrain_sampler.call(x, z - dz_step)["y"])
-			var y_f := ys[ix * stride + (iz + 1)] if iz < nz else float(terrain_sampler.call(x, z + dz_step)["y"])
+			var y_l: float = ys[(ix - 1) * stride + iz] if ix > 0 else float((terrain_sampler.call(x - dx_step, z) as Dictionary)["y"])
+			var y_r: float = ys[(ix + 1) * stride + iz] if ix < nx else float((terrain_sampler.call(x + dx_step, z) as Dictionary)["y"])
+			var y_b: float = ys[ix * stride + (iz - 1)] if iz > 0 else float((terrain_sampler.call(x, z - dz_step) as Dictionary)["y"])
+			var y_f: float = ys[ix * stride + (iz + 1)] if iz < nz else float((terrain_sampler.call(x, z + dz_step) as Dictionary)["y"])
 			var vx := Vector3(2.0 * dx_step, y_r - y_l, 0.0)
 			var vz := Vector3(0.0, y_f - y_b, 2.0 * dz_step)
 			norms[idx] = vz.cross(vx).normalized()
