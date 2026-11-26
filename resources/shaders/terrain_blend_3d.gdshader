@@ -1,13 +1,11 @@
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back;
-// Full PBR Triplanar Terrain Blending with UDN World-Space Normals, Roughness & Crevice Moss
+// Full PBR Triplanar Terrain Blending with UDN World-Space Normals & Crevice Moss (WebGL2 safe: 4 samplers)
 
 uniform sampler2D top_albedo : source_color, filter_linear_mipmap, repeat_enable;
 uniform sampler2D top_normal : hint_normal, filter_linear_mipmap, repeat_enable;
-uniform sampler2D top_roughness : filter_linear_mipmap, repeat_enable;
 uniform sampler2D side_albedo : source_color, filter_linear_mipmap, repeat_enable;
 uniform sampler2D side_normal : hint_normal, filter_linear_mipmap, repeat_enable;
-uniform sampler2D side_roughness : filter_linear_mipmap, repeat_enable;
 uniform float tex_scale = 0.22;
 uniform float moss_threshold = 0.54;
 uniform float normal_strength = 0.85;
@@ -39,13 +37,6 @@ vec3 sample_tri_rgb(sampler2D tex, vec3 pos, vec3 blend) {
 	return cx * blend.x + cy * blend.y + cz * blend.z;
 }
 
-float sample_tri_r(sampler2D tex, vec3 pos, vec3 blend) {
-	float rx = texture(tex, pos.zy * tex_scale).r;
-	float ry = texture(tex, pos.xz * tex_scale).r;
-	float rz = texture(tex, pos.xy * tex_scale).r;
-	return rx * blend.x + ry * blend.y + rz * blend.z;
-}
-
 vec3 sample_tri_wnormal(sampler2D tex_n, vec3 pos, vec3 wn, vec3 blend) {
 	vec3 tx = texture(tex_n, pos.zy * tex_scale).xyz * 2.0 - 1.0;
 	vec3 ty = texture(tex_n, pos.xz * tex_scale).xyz * 2.0 - 1.0;
@@ -69,14 +60,13 @@ void fragment() {
 
 	vec3 top_col = sample_tri_rgb(top_albedo, v_world_pos, blend);
 	vec3 side_col = sample_tri_rgb(side_albedo, v_world_pos, blend);
-	float top_r = sample_tri_r(top_roughness, v_world_pos, blend);
-	float side_r = sample_tri_r(side_roughness, v_world_pos, blend);
 	vec3 top_wn = sample_tri_wnormal(top_normal, v_world_pos, w_n, blend);
 	vec3 side_wn = sample_tri_wnormal(side_normal, v_world_pos, w_n, blend);
 
 	// Macro breakup + rock crevice height modulation so moss clings inside cliff cracks
 	float macro = vnoise(v_world_pos.xz * 0.12) * 0.6 + vnoise(v_world_pos.xz * 0.37) * 0.4;
 	float side_luma = dot(side_col, vec3(0.3, 0.59, 0.11));
+	float top_luma = dot(top_col, vec3(0.3, 0.59, 0.11));
 	float crevice = (0.35 - side_luma) * 0.45;
 	float slope_mask = smoothstep(moss_threshold - 0.16, moss_threshold + 0.16, w_n.y + (macro - 0.5) * 0.28 + crevice);
 
@@ -85,6 +75,9 @@ void fragment() {
 
 	vec3 final_wn = normalize(mix(side_wn, top_wn, slope_mask));
 	NORMAL = normalize((VIEW_MATRIX * vec4(final_wn, 0.0)).xyz);
+
+	float top_r = clamp(0.88 - top_luma * 0.2, 0.58, 0.94);
+	float side_r = clamp(0.84 - side_luma * 0.28, 0.44, 0.92);
 
 	ALBEDO = col;
 	ROUGHNESS = clamp(mix(side_r, top_r, slope_mask), 0.35, 0.96);

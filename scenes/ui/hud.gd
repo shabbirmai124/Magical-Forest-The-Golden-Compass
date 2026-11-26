@@ -13,6 +13,9 @@ extends CanvasLayer
 @onready var dash_bar: ProgressBar = $TopBar/HBoxContainer/HealthPanel/Margin/Row/VBox/DashBar
 @onready var health_value_label: Label = $TopBar/HBoxContainer/HealthPanel/Margin/Row/VBox/LabelRow/HealthValueLabel
 @onready var crystal_label: Label = $TopBar/HBoxContainer/CrystalPanel/Margin/Row/CrystalLabel
+@onready var compass_needle_pivot: Control = $TopBar/HBoxContainer/CompassPanel/Margin/Row/CompassDial/NeedlePivot
+@onready var compass_target_label: Label = $TopBar/HBoxContainer/CompassPanel/Margin/Row/VBox/CompassTargetLabel
+@onready var compass_dist_label: Label = $TopBar/HBoxContainer/CompassPanel/Margin/Row/VBox/CompassDistLabel
 @onready var level_label: Label = $TopBar/HBoxContainer/LevelPanel/Margin/LevelLabel
 @onready var score_label: Label = $TopBar/HBoxContainer/ScorePanel/Margin/ScoreLabel
 @onready var pause_button: Button = $TopBar/HBoxContainer/PauseButton
@@ -79,6 +82,7 @@ func _ready() -> void:
 	GameManager.boss_health_changed.connect(_on_boss_health)
 	GameManager.notification_posted.connect(_show_toast)
 	GameManager.dash_cooldown_changed.connect(_on_dash_cooldown)
+	GameManager.compass_updated.connect(_on_compass_updated)
 	GameManager.game_over_triggered.connect(_show_game_over)
 	GameManager.victory_triggered.connect(_show_victory)
 
@@ -254,6 +258,15 @@ func _on_dash_cooldown(ratio: float) -> void:
 	if dash_bar:
 		dash_bar.value = clampf(ratio, 0.0, 1.0)
 		dash_bar.modulate = Color(1.15, 1.15, 1.15, 1.0) if ratio >= 0.99 else Color(0.75, 0.85, 0.92, 0.85)
+
+
+func _on_compass_updated(relative_angle_rad: float, distance_m: float, target_label: String) -> void:
+	if compass_needle_pivot:
+		compass_needle_pivot.rotation = lerp_angle(compass_needle_pivot.rotation, relative_angle_rad, 0.3)
+	if compass_target_label:
+		compass_target_label.text = target_label
+	if compass_dist_label:
+		compass_dist_label.text = "Pulse [G] • %d m" % int(round(distance_m))
 
 
 func _on_health_changed(current: int, max_hp: int) -> void:

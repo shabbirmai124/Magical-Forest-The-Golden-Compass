@@ -133,10 +133,8 @@ func _upgrade_diorama() -> void:
 		tmat.shader = SHADER_TERRAIN
 		tmat.set_shader_parameter("top_albedo", TEX_MOSS_ALB)
 		tmat.set_shader_parameter("top_normal", TEX_MOSS_N)
-		tmat.set_shader_parameter("top_roughness", TEX_MOSS_R)
 		tmat.set_shader_parameter("side_albedo", TEX_STONE_ALB)
 		tmat.set_shader_parameter("side_normal", TEX_STONE_N)
-		tmat.set_shader_parameter("side_roughness", TEX_STONE_R)
 		floor_mi.material_override = tmat
 
 	var fmat := ShaderMaterial.new()

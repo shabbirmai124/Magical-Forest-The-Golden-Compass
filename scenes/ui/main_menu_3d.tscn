@@ -337,7 +337,7 @@ theme_override_fonts/font = ExtResource("10_uifont")
 theme_override_font_sizes/font_size = 22
 text = "Move: W/A/S/D or Arrows  |  Auto-Run: F  |  Sprint: Shift  |  Evade Dash: RMB / C
 Camera: Mouse / Q-E  |  Zoom: Scroll Wheel  |  Sword Combo: Left Click / J / Z
-Pause: Esc / P  |  Restart: R"
+Golden Compass Pulse: G  |  Pause: Esc / P  |  Restart: R"
 horizontal_alignment = 1
 
 [node name="QuitButton" type="Button" parent="UI/CenterContainer/MenuCard/Margin/VBox"]

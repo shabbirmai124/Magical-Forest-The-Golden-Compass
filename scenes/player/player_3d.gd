@@ -83,6 +83,13 @@ var _r_knee: Node3D = null
 var _l_elbow: Node3D = null
 var _r_elbow: Node3D = null
 var _lantern_swing: Node3D = null
+var _compass_needle: Node3D = null
+var _level_ctrl: Node = null
+var _compass_pulse_cd: float = 0.0
+var _compass_ui_accum: float = 0.0
+var _compass_sfx: AudioStreamPlayer = null
+var _compass_mote_mat: StandardMaterial3D = null
+var _compass_mote_mesh: SphereMesh = null
 
 
 func _ready() -> void:
@@ -96,6 +103,8 @@ func _ready() -> void:
 	_r_elbow = right_arm.get_node_or_null("ElbowPivot") as Node3D
 	if _l_elbow:
 		_lantern_swing = _l_elbow.get_node_or_null("LanternSwingPivot") as Node3D
+	_compass_needle = body_pivot.get_node_or_null("CompassBrooch/CompassBroochNeedle") as Node3D
+	_setup_compass_pulse_assets()
 	if slash_arc and slash_arc.material_override is StandardMaterial3D:
 		_slash_mat = (slash_arc.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
 		slash_arc.material_override = _slash_mat
@@ -117,6 +126,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		_auto_run = not _auto_run
 		var msg := "Continuous Auto-Run ON (Steer with Mouse / A-D, S to Stop)" if _auto_run else "Auto-Run OFF"
 		GameManager.notification_posted.emit(msg, Color(0.55, 0.96, 0.88))
+		return
+	if event.is_action_pressed("compass_pulse"):
+		_trigger_golden_compass_pulse(true)
 		return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -196,6 +208,7 @@ func _physics_process(delta: float) -> void:
 	if _swing_active:
 		_scan_sword_hits()
 	_update_procedural_anim(delta, on_floor_now)
+	_update_golden_compass(delta)
 
 
 func _apply_gravity(delta: float, on_floor_now: bool) -> void:
@@ -594,3 +607,112 @@ func _update_procedural_anim(delta: float, on_floor_now: bool) -> void:
 	if _lantern_swing:
 		_lantern_swing.rotation.z = lerpf(_lantern_swing.rotation.z, -target_bank * 1.6 + sin(_anim_t * 3.1) * 0.06, 9.0 * delta)
 		_lantern_swing.rotation.x = lerpf(_lantern_swing.rotation.x, clampf(h_speed * 0.025, 0.0, 0.32) - left_arm.rotation.x * 0.4, 9.0 * delta)
+
+
+func _setup_compass_pulse_assets() -> void:
+	_compass_sfx = AudioStreamPlayer.new()
+	_compass_sfx.stream = preload("res://assets/audio/sfx/secret_chime.wav")
+	_compass_sfx.bus = &"SFX"
+	_compass_sfx.volume_db = -4.0
+	add_child(_compass_sfx)
+
+	_compass_mote_mat = StandardMaterial3D.new()
+	_compass_mote_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_compass_mote_mat.albedo_color = Color(1.0, 0.88, 0.36, 0.95)
+	_compass_mote_mat.emission_enabled = true
+	_compass_mote_mat.emission = Color(1.0, 0.82, 0.24, 1.0)
+	_compass_mote_mat.emission_energy_multiplier = 3.6
+	_compass_mote_mat.roughness = 0.2
+
+	_compass_mote_mesh = SphereMesh.new()
+	_compass_mote_mesh.radius = 0.14
+	_compass_mote_mesh.height = 0.28
+
+	# Automatic subtle trailhead compass guide pulse 1.8s after stage spawn
+	get_tree().create_timer(1.8).timeout.connect(func() -> void:
+		if is_inside_tree() and not GameManager.is_game_ended:
+			_trigger_golden_compass_pulse(false)
+	)
+
+
+func _update_golden_compass(delta: float) -> void:
+	if _compass_pulse_cd > 0.0:
+		_compass_pulse_cd = maxf(_compass_pulse_cd - delta, 0.0)
+	_compass_ui_accum += delta
+	if _compass_ui_accum < 0.05:
+		return
+	_compass_ui_accum = 0.0
+
+	if not _level_ctrl or not is_instance_valid(_level_ctrl):
+		_level_ctrl = get_tree().get_first_node_in_group("level_controller")
+	if not _level_ctrl or not _level_ctrl.has_method("get_compass_target_info"):
+		return
+
+	var info: Dictionary = _level_ctrl.get_compass_target_info()
+	var target_pos: Vector3 = info.get("pos", global_position + Vector3(0.0, 0.0, -100.0))
+	var target_lbl: String = String(info.get("label", "Stage Portal"))
+	var flat_to := Vector3(target_pos.x - global_position.x, 0.0, target_pos.z - global_position.z)
+	var dist_m := flat_to.length()
+	var world_yaw := atan2(-flat_to.x, -flat_to.z) if dist_m > 0.1 else 0.0
+
+	var cam_fwd := -cam_yaw.global_transform.basis.z
+	cam_fwd.y = 0.0
+	var cam_yaw_ang := atan2(-cam_fwd.x, -cam_fwd.z) if cam_fwd.length() > 0.01 else 0.0
+	var rel_angle := wrapf(cam_yaw_ang - world_yaw, -PI, PI)
+
+	if _compass_needle and is_instance_valid(_compass_needle):
+		var body_rel := wrapf(visual_rig.rotation.y - world_yaw, -PI, PI)
+		_compass_needle.rotation.y = lerp_angle(_compass_needle.rotation.y, -body_rel, 0.28)
+
+	GameManager.compass_updated.emit(rel_angle, dist_m, target_lbl)
+
+
+func _trigger_golden_compass_pulse(announce: bool) -> void:
+	if _compass_pulse_cd > 0.0:
+		return
+	_compass_pulse_cd = 2.0
+	if not _level_ctrl or not is_instance_valid(_level_ctrl):
+		_level_ctrl = get_tree().get_first_node_in_group("level_controller")
+	if not _level_ctrl or not _level_ctrl.has_method("get_compass_target_info"):
+		return
+
+	var info: Dictionary = _level_ctrl.get_compass_target_info()
+	var target_pos: Vector3 = info.get("pos", global_position + Vector3(0.0, 0.0, -50.0))
+	var target_lbl: String = String(info.get("label", "Wayshrine"))
+	var dist_m := int(round(global_position.distance_to(target_pos)))
+
+	if announce:
+		if _compass_sfx and _compass_sfx.stream:
+			_compass_sfx.pitch_scale = 1.18
+			_compass_sfx.play()
+		GameManager.notification_posted.emit("Golden Compass Resonates — %s (%d m ahead)" % [target_lbl, dist_m], Color(1.0, 0.88, 0.4))
+
+	var root := get_tree().current_scene
+	if not root:
+		return
+	var use_road := _level_ctrl.has_method("sample_road_point")
+	var start_pt := global_position + Vector3(0.0, 1.35, 0.0)
+	var dir_to := (target_pos - global_position)
+	dir_to.y = 0.0
+	var flat_dir := dir_to.normalized() if dir_to.length() > 0.1 else Vector3.FORWARD
+
+	for i in 12:
+		var step_d := 2.6 + float(i) * 3.1
+		var pt := start_pt + flat_dir * step_d
+		if use_road and target_pos.z < global_position.z:
+			var rz := global_position.z - step_d
+			var rp: Vector3 = _level_ctrl.sample_road_point(rz)
+			pt = Vector3(rp.x, rp.y + 1.25 + sin(float(i) * 0.55) * 0.35, rp.z)
+		var mote := MeshInstance3D.new()
+		mote.mesh = _compass_mote_mesh
+		mote.material_override = _compass_mote_mat
+		mote.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(mote)
+		mote.global_position = start_pt + Vector3(0.0, 0.1, 0.0)
+		mote.scale = Vector3.ONE * 0.15
+		var tw := mote.create_tween().set_parallel(true)
+		var delay := float(i) * 0.055
+		tw.tween_property(mote, "global_position", pt, 0.45).set_delay(delay).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(mote, "scale", Vector3.ONE * (1.15 - float(i) * 0.04), 0.3).set_delay(delay)
+		tw.tween_property(mote, "scale", Vector3.ZERO, 0.55).set_delay(delay + 1.65)
+		tw.chain().tween_callback(mote.queue_free)

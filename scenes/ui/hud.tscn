@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3 uid="uid://hud001"]
+[gd_scene load_steps=18 format=3 uid="uid://hud001"]
 
 [ext_resource type="Script" path="res://scenes/ui/hud.gd" id="1_script"]
 [ext_resource type="Font" path="res://resources/fonts/title_font.tres" id="2_titlefont"]
@@ -6,6 +6,7 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/ui/heart_icon.png" id="4_heart"]
 [ext_resource type="Texture2D" path="res://assets/sprites/ui/crystal_icon.png" id="5_crystal"]
 [ext_resource type="Shader" path="res://resources/shaders/vignette_2d.gdshader" id="6_vigshader"]
+[ext_resource type="Texture2D" path="res://assets/sprites/items/golden_compass.png" id="7_compass"]
 
 [sub_resource type="ShaderMaterial" id="Mat_vignette"]
 shader = ExtResource("6_vigshader")
@@ -231,6 +232,72 @@ theme_override_fonts/font = ExtResource("3_uifont")
 theme_override_font_sizes/font_size = 26
 text = "0"
 
+[node name="CompassPanel" type="PanelContainer" parent="TopBar/HBoxContainer"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Margin" type="MarginContainer" parent="TopBar/HBoxContainer/CompassPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 8
+
+[node name="Row" type="HBoxContainer" parent="TopBar/HBoxContainer/CompassPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="CompassDial" type="Control" parent="TopBar/HBoxContainer/CompassPanel/Margin/Row"]
+custom_minimum_size = Vector2(46, 46)
+layout_mode = 2
+
+[node name="CompassIcon" type="TextureRect" parent="TopBar/HBoxContainer/CompassPanel/Margin/Row/CompassDial"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("7_compass")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="NeedlePivot" type="Control" parent="TopBar/HBoxContainer/CompassPanel/Margin/Row/CompassDial"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="NeedleArrow" type="ColorRect" parent="TopBar/HBoxContainer/CompassPanel/Margin/Row/CompassDial/NeedlePivot"]
+layout_mode = 0
+offset_left = -3.0
+offset_top = -20.0
+offset_right = 3.0
+offset_bottom = 2.0
+color = Color(1, 0.9, 0.34, 1)
+
+[node name="VBox" type="VBoxContainer" parent="TopBar/HBoxContainer/CompassPanel/Margin/Row"]
+layout_mode = 2
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="CompassTargetLabel" type="Label" parent="TopBar/HBoxContainer/CompassPanel/Margin/Row/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.89, 0.52, 1)
+theme_override_fonts/font = ExtResource("3_uifont")
+theme_override_font_sizes/font_size = 18
+text = "Ancient Wayshrine"
+
+[node name="CompassDistLabel" type="Label" parent="TopBar/HBoxContainer/CompassPanel/Margin/Row/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.76, 0.94, 0.9, 1)
+theme_override_fonts/font = ExtResource("3_uifont")
+theme_override_font_sizes/font_size = 15
+text = "Pulse [G] • -- m"
+
 [node name="Spacer" type="Control" parent="TopBar/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
@@ -322,7 +389,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.92, 0.88, 0.95)
 theme_override_fonts/font = ExtResource("3_uifont")
 theme_override_font_sizes/font_size = 20
-text = "WASD: Move  |  F: Auto-Run  |  Shift: Sprint  |  RMB / C: Dash  |  Scroll: Zoom  |  Click / J: Sword  |  Esc: Pause"
+text = "WASD: Move  |  F: Auto-Run  |  Shift: Sprint  |  RMB / C: Dash  |  G: Golden Compass  |  Click / J: Sword  |  Esc: Pause"
 horizontal_alignment = 1
 
 [node name="BossBarBox" type="PanelContainer" parent="."]

@@ -11,9 +11,9 @@ config_version=5
 [application]
 
 config/name="The Lost Golden Compass 3D"
-config/description="A spacious 3D dark-fantasy action-platformer in Godot 4.7.2: explore the moonlit forest under an expansive cosmic sky, uncover hidden alcoves, battle Forest Wisps and the Forest Guardian, and recover the Lost Golden Compass."
-run/main_scene="res://scenes/ui/main_menu_3d.tscn"
-config/features=PackedStringArray("4.7", "Forward Plus")
+config/description="A richly detailed 3D dark-fantasy action-adventure built purely in Godot 4 (GDScript, GL Compatibility): explore winding multi-kilometer forest roads, highland viaducts, sanctum causeways, and celestial cloudways to recover the Lost Golden Compass."
+run/main_scene="res://scenes/levels/level_1_3d.tscn"
+config/features=PackedStringArray("4.3", "GL Compatibility")
 
 [audio]
 
@@ -119,6 +119,12 @@ dodge={
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":1,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
+compass_pulse={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":71,"physical_keycode":0,"key_label":0,"unicode":103,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":3,"pressure":0.0,"pressed":false,"script":null)
+]
+}
 
 [input_devices]
 
@@ -126,12 +132,6 @@ joypad/ignore_unfocused=true
 
 [layer_names]
 
-2d_physics/layer_1="World"
-2d_physics/layer_2="Player"
-2d_physics/layer_3="Enemies"
-2d_physics/layer_4="PlayerAttack"
-2d_physics/layer_5="Hazards"
-2d_physics/layer_6="PickupsAndZones"
 3d_physics/layer_1="World"
 3d_physics/layer_2="Player"
 3d_physics/layer_3="Enemies"
@@ -142,11 +142,11 @@ joypad/ignore_unfocused=true
 [physics]
 
 common/physics_ticks_per_second=60
-2d/default_gravity=3920.0
 
 [rendering]
 
-renderer/rendering_method="forward_plus"
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
 textures/canvas_textures/default_texture_filter=1
-viewport/hdr_2d=true
+viewport/hdr_2d=false
 environment/defaults/default_clear_color=Color(0.02, 0.038, 0.08, 1)

@@ -8,6 +8,7 @@ signal crystals_changed(collected: int)
 signal boss_health_changed(current: int, max_hp: int, visible_bar: bool)
 signal notification_posted(message: String, accent: Color)
 signal dash_cooldown_changed(ready_ratio: float)
+signal compass_updated(relative_angle_rad: float, distance_m: float, target_label: String)
 signal quality_changed(level: int)
 signal game_over_triggered
 signal victory_triggered

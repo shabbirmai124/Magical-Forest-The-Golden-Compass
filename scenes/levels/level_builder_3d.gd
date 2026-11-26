@@ -127,36 +127,44 @@ func _ready() -> void:
 func _apply_stage_atmosphere() -> void:
 	var we := get_node_or_null("WorldEnvironment") as WorldEnvironment
 	var sun := get_node_or_null("MoonLight") as DirectionalLight3D
+	var is_fwd := RenderingServer.get_current_rendering_method() == "forward_plus"
 	if we and we.environment:
 		var env := we.environment.duplicate() as Environment
 		we.environment = env
+		if not is_fwd:
+			env.ssr_enabled = false
+			env.ssao_enabled = false
+			env.ssil_enabled = false
+			env.volumetric_fog_enabled = false
 		match layout_id:
 			"level_1":
-				env.fog_light_color = Color(0.06, 0.16, 0.22, 1.0)
-				env.fog_density = 0.0062
+				env.fog_light_color = Color(0.08, 0.19, 0.26, 1.0)
+				env.fog_density = 0.0052
 			"level_2":
-				env.fog_light_color = Color(0.11, 0.14, 0.26, 1.0)
-				env.fog_density = 0.0078
-				env.volumetric_fog_albedo = Color(0.38, 0.48, 0.72, 1.0)
+				env.fog_light_color = Color(0.12, 0.16, 0.28, 1.0)
+				env.fog_density = 0.0064
+				if is_fwd:
+					env.volumetric_fog_albedo = Color(0.38, 0.48, 0.72, 1.0)
 				if sun:
-					sun.light_color = Color(0.76, 0.84, 1.0, 1.0)
-					sun.light_energy = 1.3
+					sun.light_color = Color(0.78, 0.86, 1.0, 1.0)
+					sun.light_energy = 1.35
 			"level_3":
-				env.fog_light_color = Color(0.05, 0.17, 0.21, 1.0)
-				env.fog_density = 0.0065
+				env.fog_light_color = Color(0.07, 0.19, 0.24, 1.0)
+				env.fog_density = 0.0056
 				if sun:
-					sun.light_color = Color(0.68, 0.88, 0.94, 1.0)
-					sun.light_energy = 1.25
+					sun.light_color = Color(0.7, 0.9, 0.96, 1.0)
+					sun.light_energy = 1.3
 			"level_4":
-				env.fog_light_color = Color(0.16, 0.25, 0.44, 1.0)
-				env.fog_density = 0.0036
-				env.volumetric_fog_density = 0.0055
-				env.volumetric_fog_albedo = Color(0.48, 0.68, 0.96, 1.0)
-				env.ambient_light_color = Color(0.36, 0.52, 0.76, 1.0)
-				env.ambient_light_energy = 0.92
+				env.fog_light_color = Color(0.18, 0.28, 0.48, 1.0)
+				env.fog_density = 0.0032
+				if is_fwd:
+					env.volumetric_fog_density = 0.0055
+					env.volumetric_fog_albedo = Color(0.48, 0.68, 0.96, 1.0)
+				env.ambient_light_color = Color(0.4, 0.56, 0.8, 1.0)
+				env.ambient_light_energy = 0.98
 				if sun:
-					sun.light_color = Color(0.84, 0.92, 1.0, 1.0)
-					sun.light_energy = 1.48
+					sun.light_color = Color(0.86, 0.94, 1.0, 1.0)
+					sun.light_energy = 1.5
 
 
 func _fit_kill_zone() -> void:
@@ -185,14 +193,77 @@ func get_road_progress() -> Dictionary:
 	return {"traveled": traveled, "total": total, "ratio": traveled / total}
 
 
+func sample_road_point(z_pos: float) -> Vector3:
+	var rx := _road_center_x(z_pos)
+	var ry := _ground_surface_y(rx, z_pos)
+	return Vector3(rx, ry, z_pos)
+
+
+func get_compass_target_info() -> Dictionary:
+	var pz := 8.0
+	var ppos := Vector3(0.0, 0.0, 8.0)
+	if _player_node and is_instance_valid(_player_node):
+		ppos = _player_node.global_position
+		pz = ppos.z
+
+	# 1. Active collectible Golden Compass takes highest priority
+	for child in get_children():
+		if child is Area3D and child.name.contains("GoldenCompass"):
+			return {"pos": (child as Node3D).global_position, "label": "Golden Compass Relic", "type": "compass"}
+
+	# 2. Nearest unactivated Wayshrine ahead along the road
+	var best_shrine: Node3D = null
+	var best_s_dist := 999999.0
+	for sh_var in get_tree().get_nodes_in_group("wayshrines"):
+		var sh := sh_var as Node3D
+		if not sh or not is_instance_valid(sh):
+			continue
+		if sh.has_method("is_activated") and bool(sh.is_activated()):
+			continue
+		if sh.global_position.z <= pz + 18.0:
+			var d := ppos.distance_to(sh.global_position)
+			if d < best_s_dist:
+				best_s_dist = d
+				best_shrine = sh
+	if best_shrine and best_s_dist < 620.0:
+		return {"pos": best_shrine.global_position, "label": "Ancient Wayshrine", "type": "wayshrine"}
+
+	# 3. Active Stage Boss if present
+	var enemies_node := get_node_or_null("Enemies")
+	if enemies_node:
+		for e in enemies_node.get_children():
+			if e is Node3D and "engage_radius" in e and not bool(e.get("is_defeated")):
+				var b_lbl := "Astral Guardian" if layout_id == "level_4" else "Forest Guardian"
+				return {"pos": (e as Node3D).global_position, "label": b_lbl, "type": "boss"}
+
+	# 4. Stage Exit / Astral Portal
+	var exit_node := get_node_or_null("LevelExit3D") as Node3D
+	if not exit_node:
+		exit_node = get_node_or_null("AstralPortal") as Node3D
+	if exit_node and is_instance_valid(exit_node):
+		var p_lbl := "Northern Astral Portal" if exit_node.name == "AstralPortal" else "Stage Portal"
+		return {"pos": exit_node.global_position, "label": p_lbl, "type": "portal"}
+
+	var z_end := float(_cfg.get("progress_end_z", -4590.0))
+	return {"pos": sample_road_point(z_end), "label": "Northern Horizon", "type": "goal"}
+
+
 func _apply_graphics_quality(lvl: int) -> void:
 	var we := get_node_or_null("WorldEnvironment") as WorldEnvironment
+	var is_fwd := RenderingServer.get_current_rendering_method() == "forward_plus"
 	if we and we.environment:
 		var env := we.environment
-		env.ssao_enabled = (lvl >= 1)
-		env.ssil_enabled = (lvl >= 2)
-		env.ssr_enabled = (lvl >= 2)
-		env.volumetric_fog_enabled = (lvl >= 1)
+		if is_fwd:
+			env.ssao_enabled = (lvl >= 1)
+			env.ssil_enabled = (lvl >= 2)
+			env.ssr_enabled = (lvl >= 2)
+			env.volumetric_fog_enabled = (lvl >= 1)
+		else:
+			env.ssao_enabled = false
+			env.ssil_enabled = false
+			env.ssr_enabled = false
+			env.volumetric_fog_enabled = false
+			env.glow_enabled = (lvl >= 1)
 	var sun := get_node_or_null("MoonLight") as DirectionalLight3D
 	if sun:
 		sun.shadow_enabled = (lvl >= 1)
@@ -221,22 +292,17 @@ func _init_procedural_materials() -> void:
 	_road_terrain_mat.shader = SHADER_ROAD_TERRAIN
 	_road_terrain_mat.set_shader_parameter("moss_albedo", TEX_MOSS_ALB)
 	_road_terrain_mat.set_shader_parameter("moss_normal", TEX_MOSS_N)
-	_road_terrain_mat.set_shader_parameter("moss_roughness", TEX_MOSS_R)
 	_road_terrain_mat.set_shader_parameter("soil_albedo", TEX_SOIL_ALB)
 	_road_terrain_mat.set_shader_parameter("soil_normal", TEX_SOIL_N)
-	_road_terrain_mat.set_shader_parameter("soil_roughness", TEX_SOIL_R)
 	_road_terrain_mat.set_shader_parameter("stone_albedo", TEX_STONE_ALB)
 	_road_terrain_mat.set_shader_parameter("stone_normal", TEX_STONE_N)
-	_road_terrain_mat.set_shader_parameter("stone_roughness", TEX_STONE_R)
 
 	_terrain_stone_mat = ShaderMaterial.new()
 	_terrain_stone_mat.shader = SHADER_TERRAIN
 	_terrain_stone_mat.set_shader_parameter("top_albedo", TEX_MOSS_ALB)
 	_terrain_stone_mat.set_shader_parameter("top_normal", TEX_MOSS_N)
-	_terrain_stone_mat.set_shader_parameter("top_roughness", TEX_MOSS_R)
 	_terrain_stone_mat.set_shader_parameter("side_albedo", TEX_STONE_ALB)
 	_terrain_stone_mat.set_shader_parameter("side_normal", TEX_STONE_N)
-	_terrain_stone_mat.set_shader_parameter("side_roughness", TEX_STONE_R)
 	_terrain_stone_mat.set_shader_parameter("tex_scale", 0.24)
 	_terrain_stone_mat.set_shader_parameter("moss_threshold", 0.7)
 
@@ -543,8 +609,11 @@ func _update_streaming_chunks(build_all: bool) -> void:
 
 	var t_p := clampf((pz - z_min) / maxf(z_max - z_min, 1.0), 0.0, 1.0)
 	var p_chunk := clampi(int(floor(t_p * float(_chunk_count))), 0, _chunk_count - 1)
-	var min_c := maxi(p_chunk - 4, 0)
-	var max_c := mini(p_chunk + 2, _chunk_count - 1)
+	var is_web_or_compat := OS.has_feature("web") or RenderingServer.get_current_rendering_method() == "gl_compatibility"
+	var look_ahead := 2 if is_web_or_compat else 4
+	var look_behind := 1 if is_web_or_compat else 2
+	var min_c := maxi(p_chunk - look_ahead, 0)
+	var max_c := mini(p_chunk + look_behind, _chunk_count - 1)
 
 	# Free distant chunks outside active window
 	for existing_k in _active_chunk_keys():
@@ -567,9 +636,12 @@ func _update_streaming_chunks(build_all: bool) -> void:
 	candidates.sort_custom(func(a: int, b: int) -> bool:
 		return absi(a - p_chunk) < absi(b - p_chunk)
 	)
+	var built_now := 0
+	var max_initial := 2 if is_web_or_compat else candidates.size()
 	for c_idx in candidates:
 		_build_chunk(c_idx)
-		if not build_all:
+		built_now += 1
+		if not build_all or built_now >= max_initial:
 			break
 
 
@@ -594,8 +666,9 @@ func _build_chunk(c_idx: int) -> void:
 	_chunk_lights[c_idx] = []
 	_chunk_cages[c_idx] = []
 
+	var grid_step := 3.0 if (OS.has_feature("web") or RenderingServer.get_current_rendering_method() == "gl_compatibility") else 2.5
 	var terrain_mesh := MeshFactory3D.build_road_valley_terrain_mesh(
-		cz0, cz1, x_half, 2.5, 2.5, Callable(self, "_sample_terrain")
+		cz0, cz1, x_half, grid_step, grid_step, Callable(self, "_sample_terrain")
 	)
 	var tbody := StaticBody3D.new()
 	tbody.name = "TerrainBody"
@@ -1779,6 +1852,15 @@ func _populate_stage_encounters() -> void:
 	var z_top := road_start_z - 34.0
 	var z_bot := road_end_z + (55.0 if boss_z < 90000.0 else 36.0)
 	var span := maxf(z_top - z_bot, 100.0)
+
+	# 0. Immediate Trailhead Archway & Opening Wayshrine visible right on spawn
+	var trailhead_arch_z := road_start_z - 22.0
+	_add_road_archway(trailhead_arch_z, 13.4, 7.6, world_geo)
+	var first_shrine_z := road_start_z - 42.0
+	_spawn_wayshrine(_road_center_x(first_shrine_z) + 4.2, first_shrine_z, "Trailhead Wayshrine Lit! Press [G] to Pulse the Golden Compass (+50)")
+	for ci_open in 3:
+		var oz := road_start_z - 11.0 - float(ci_open) * 6.5
+		_spawn_crystal(_road_center_x(oz) + sin(float(ci_open)) * 1.4, oz, 1.1)
 
 	# 1. Wayshrines spaced every ~540m (8 shrines per stage for steady Vitality sustain & milestones)
 	var shrine_count := 8
