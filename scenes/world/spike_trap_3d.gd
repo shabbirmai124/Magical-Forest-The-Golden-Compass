@@ -41,9 +41,9 @@ func _build_visuals() -> void:
 
 	var grate := MeshInstance3D.new()
 	var gm := BoxMesh.new()
-	gm.size = Vector3(2.2, 0.14, 2.2)
+	gm.size = Vector3(2.2, 0.9, 2.2)
 	grate.mesh = gm
-	grate.position = Vector3(0.0, 0.07, 0.0)
+	grate.position = Vector3(0.0, -0.34, 0.0)
 	grate.material_override = base_mat
 	add_child(grate)
 

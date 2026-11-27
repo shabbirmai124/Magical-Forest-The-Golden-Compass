@@ -8,6 +8,8 @@ extends CanvasLayer
 const TITLE_FONT: Font = preload("res://resources/fonts/title_font.tres")
 const UI_FONT: Font = preload("res://resources/fonts/ui_font.tres")
 const DIALOGUE_SCRIPT = preload("res://scenes/ui/dialogue_box.gd")
+const COMPASS_DIAL_SCRIPT = preload("res://scenes/ui/golden_compass_dial.gd")
+const REALM_MAP_SCRIPT = preload("res://scenes/ui/realm_map_view.gd")
 
 @onready var damage_vignette: ColorRect = $DamageVignette
 
@@ -22,8 +24,9 @@ var _shards_lbl: Label = null
 
 var _compass_target_lbl: Label = null
 var _compass_dist_lbl: Label = null
-var _compass_arrow_pivot: Control = null
+var _compass_dial: Control = null
 var _compass_cd_bar: ProgressBar = null
+var _last_compass_cd: float = 1.0
 
 var _stage_lbl: Label = null
 var _score_lbl: Label = null
@@ -43,6 +46,11 @@ var _toast_tween: Tween = null
 
 var _interact_panel: PanelContainer = null
 var _interact_lbl: Label = null
+
+var _map_overlay: Control = null
+var _map_title_lbl: Label = null
+var _map_obj_lbl: Label = null
+var _is_map_open: bool = false
 
 var _journal_overlay: Control = null
 var _journal_content: VBoxContainer = null
@@ -201,42 +209,33 @@ func _build_hud_tree() -> void:
 	_shards_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.45))
 	items_row.add_child(_shards_lbl)
 
-	# --- TOP-CENTER: GOLDEN COMPASS BAR ---
+	# --- TOP-CENTER: ORNATE GOLDEN COMPASS BAR ---
 	var comp_panel: PanelContainer = PanelContainer.new()
 	comp_panel.anchor_left = 0.5
 	comp_panel.anchor_right = 0.5
-	comp_panel.offset_left = -190.0
-	comp_panel.offset_right = 190.0
+	comp_panel.offset_left = -210.0
+	comp_panel.offset_right = 210.0
 	comp_panel.offset_top = 14.0
-	comp_panel.offset_bottom = 86.0
-	comp_panel.add_theme_stylebox_override("panel", _make_box(dark_bg, gold_border, 14, 16.0, 8.0))
+	comp_panel.offset_bottom = 92.0
+	comp_panel.add_theme_stylebox_override("panel", _make_box(dark_bg, gold_border, 16, 14.0, 8.0))
 	_root.add_child(comp_panel)
 
 	var comp_h: HBoxContainer = HBoxContainer.new()
 	comp_h.add_theme_constant_override("separation", 14)
+	comp_h.alignment = BoxContainer.ALIGNMENT_CENTER
 	comp_panel.add_child(comp_h)
 
-	# Rotating Golden Compass Arrow Widget
-	var dial_holder: Control = Control.new()
-	dial_holder.custom_minimum_size = Vector2(44.0, 44.0)
-	comp_h.add_child(dial_holder)
-
-	var dial_ring: Panel = Panel.new()
-	dial_ring.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dial_ring.add_theme_stylebox_override("panel", _make_box(Color(0.08, 0.12, 0.16, 0.95), gold_border, 22, 0.0, 0.0))
-	dial_holder.add_child(dial_ring)
-
-	_compass_arrow_pivot = Control.new()
-	_compass_arrow_pivot.position = Vector2(22.0, 22.0)
-	dial_holder.add_child(_compass_arrow_pivot)
-
-	var arrow_poly: Polygon2D = Polygon2D.new()
-	arrow_poly.polygon = PackedVector2Array([Vector2(0, -15), Vector2(7, 8), Vector2(0, 3), Vector2(-7, 8)])
-	arrow_poly.color = Color(1.0, 0.88, 0.34)
-	_compass_arrow_pivot.add_child(arrow_poly)
+	# Strictly Circular Custom-Drawn Golden Compass Dial (58x58, never squished!)
+	_compass_dial = Control.new()
+	_compass_dial.set_script(COMPASS_DIAL_SCRIPT)
+	_compass_dial.custom_minimum_size = Vector2(58.0, 58.0)
+	_compass_dial.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_compass_dial.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	comp_h.add_child(_compass_dial)
 
 	var comp_v: VBoxContainer = VBoxContainer.new()
 	comp_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	comp_v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	comp_v.add_theme_constant_override("separation", 4)
 	comp_h.add_child(comp_v)
 
@@ -250,7 +249,7 @@ func _build_hud_tree() -> void:
 	comp_top.add_child(_compass_target_lbl)
 
 	_compass_dist_lbl = Label.new()
-	_compass_dist_lbl.text = "14 m"
+	_compass_dist_lbl.text = "N • 14 m"
 	_compass_dist_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_compass_dist_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_compass_dist_lbl.add_theme_font_override("font", UI_FONT)
@@ -311,7 +310,7 @@ func _build_hud_tree() -> void:
 	var tr_v: VBoxContainer = VBoxContainer.new()
 	tr_v.anchor_left = 1.0
 	tr_v.anchor_right = 1.0
-	tr_v.offset_left = -335.0
+	tr_v.offset_left = -385.0
 	tr_v.offset_right = -18.0
 	tr_v.offset_top = 16.0
 	tr_v.add_theme_constant_override("separation", 8)
@@ -343,6 +342,11 @@ func _build_hud_tree() -> void:
 	_score_lbl.add_theme_font_override("font", UI_FONT)
 	_score_lbl.add_theme_font_size_override("font_size", 14)
 	btn_row.add_child(_score_lbl)
+
+	var map_btn: Button = _make_button("Map [M]", Color(0.1, 0.24, 0.28, 0.95), teal_border)
+	map_btn.add_theme_font_size_override("font_size", 12)
+	map_btn.pressed.connect(toggle_map)
+	btn_row.add_child(map_btn)
 
 	var j_btn: Button = _make_button("Journal [Q]", Color(0.09, 0.2, 0.28, 0.95), teal_border)
 	j_btn.add_theme_font_size_override("font_size", 12)
@@ -433,21 +437,45 @@ func _build_hud_tree() -> void:
 	_interact_lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.52))
 	_interact_panel.add_child(_interact_lbl)
 
+	# --- BOTTOM-LEFT: LIVE CIRCULAR ARCANE MINIMAP ---
+	var mm_wrap: VBoxContainer = VBoxContainer.new()
+	mm_wrap.anchor_left = 0.0
+	mm_wrap.anchor_top = 1.0
+	mm_wrap.anchor_bottom = 1.0
+	mm_wrap.offset_left = 18.0
+	mm_wrap.offset_right = 192.0
+	mm_wrap.offset_top = -222.0
+	mm_wrap.offset_bottom = -20.0
+	mm_wrap.add_theme_constant_override("separation", 5)
+	_root.add_child(mm_wrap)
+
+	var mm_view: Control = Control.new()
+	mm_view.set_script(REALM_MAP_SCRIPT)
+	mm_view.set("is_full_map", false)
+	mm_view.custom_minimum_size = Vector2(168.0, 168.0)
+	mm_view.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	mm_wrap.add_child(mm_view)
+
+	var mm_btn: Button = _make_button("Realm Map [M]", Color(0.06, 0.14, 0.18, 0.92), gold_border)
+	mm_btn.add_theme_font_size_override("font_size", 12)
+	mm_btn.pressed.connect(toggle_map)
+	mm_wrap.add_child(mm_btn)
+
 	# --- BOTTOM CONTROLS HINT BAR ---
 	var hint_lbl: Label = Label.new()
 	hint_lbl.anchor_left = 0.5
 	hint_lbl.anchor_right = 0.5
 	hint_lbl.anchor_top = 1.0
 	hint_lbl.anchor_bottom = 1.0
-	hint_lbl.offset_left = -480.0
-	hint_lbl.offset_right = 480.0
+	hint_lbl.offset_left = -460.0
+	hint_lbl.offset_right = 520.0
 	hint_lbl.offset_top = -28.0
 	hint_lbl.offset_bottom = -6.0
 	hint_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint_lbl.add_theme_font_override("font", UI_FONT)
 	hint_lbl.add_theme_font_size_override("font_size", 12)
 	hint_lbl.add_theme_color_override("font_color", Color(0.84, 0.9, 0.88, 0.82))
-	hint_lbl.text = "WASD Move • Space Jump/Double Jump • Shift Dash • LMB/J Melee • RMB/K Golden Arc • E Interact • G Compass Pulse • H Herb • Q Journal"
+	hint_lbl.text = "WASD Move • Space Jump • Shift Dash • LMB/J Melee • RMB/K Arc • E Interact • G Compass • M Map • H Herb • Q Journal"
 	_root.add_child(hint_lbl)
 
 	# --- STORY DIALOGUE BOX ---
@@ -456,7 +484,8 @@ func _build_hud_tree() -> void:
 	dlg.set_script(DIALOGUE_SCRIPT)
 	_root.add_child(dlg)
 
-	# --- MODALS: QUEST JOURNAL, PAUSE, GAME OVER, VICTORY ---
+	# --- MODALS: REALM MAP, QUEST JOURNAL, PAUSE, GAME OVER, VICTORY ---
+	_build_map_overlay()
 	_build_journal_overlay()
 	_build_pause_overlay()
 	_build_gameover_overlay()
@@ -471,6 +500,101 @@ func _build_modal_backdrop() -> ColorRect:
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	_root.add_child(bg)
 	return bg
+
+
+func _build_map_overlay() -> void:
+	_map_overlay = _build_modal_backdrop()
+	var card: PanelContainer = PanelContainer.new()
+	card.anchor_left = 0.5
+	card.anchor_right = 0.5
+	card.anchor_top = 0.5
+	card.anchor_bottom = 0.5
+	card.offset_left = -380.0
+	card.offset_right = 380.0
+	card.offset_top = -290.0
+	card.offset_bottom = 290.0
+	card.add_theme_stylebox_override("panel", _make_box(Color(0.035, 0.06, 0.095, 0.97), Color(0.92, 0.76, 0.34), 16, 22.0, 18.0))
+	_map_overlay.add_child(card)
+
+	var v: VBoxContainer = VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	card.add_child(v)
+
+	_map_title_lbl = Label.new()
+	_map_title_lbl.text = "REALM CARTOGRAPHY — STAGE 1"
+	_map_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_map_title_lbl.add_theme_font_override("font", TITLE_FONT)
+	_map_title_lbl.add_theme_font_size_override("font_size", 22)
+	_map_title_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.52))
+	v.add_child(_map_title_lbl)
+
+	_map_obj_lbl = Label.new()
+	_map_obj_lbl.text = "Active Compass Target: Elder Sylvan"
+	_map_obj_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_map_obj_lbl.add_theme_font_override("font", UI_FONT)
+	_map_obj_lbl.add_theme_font_size_override("font_size", 14)
+	_map_obj_lbl.add_theme_color_override("font_color", Color(0.62, 0.96, 0.88))
+	v.add_child(_map_obj_lbl)
+
+	var body_h: HBoxContainer = HBoxContainer.new()
+	body_h.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body_h.add_theme_constant_override("separation", 18)
+	v.add_child(body_h)
+
+	var full_map: Control = Control.new()
+	full_map.set_script(REALM_MAP_SCRIPT)
+	full_map.set("is_full_map", true)
+	full_map.custom_minimum_size = Vector2(440.0, 440.0)
+	full_map.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	full_map.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	body_h.add_child(full_map)
+
+	var leg_v: VBoxContainer = VBoxContainer.new()
+	leg_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	leg_v.add_theme_constant_override("separation", 8)
+	body_h.add_child(leg_v)
+
+	var leg_hdr: Label = Label.new()
+	leg_hdr.text = "MAP LEGEND"
+	leg_hdr.add_theme_font_override("font", TITLE_FONT)
+	leg_hdr.add_theme_font_size_override("font_size", 16)
+	leg_hdr.add_theme_color_override("font_color", Color(1.0, 0.88, 0.45))
+	leg_v.add_child(leg_hdr)
+
+	for item in [
+		["▲  You (Camera Cone)", Color(1.0, 0.98, 0.92)],
+		["★  Active Objective", Color(1.0, 0.92, 0.44)],
+		["◆  Stage Portal (Open / Sealed)", Color(0.38, 1.0, 0.84)],
+		["◆  Ancient Wayshrine", Color(0.32, 0.98, 0.86)],
+		["◆  Rune Pillar (Stage 2)", Color(0.45, 0.82, 1.0)],
+		["●  Story Guide NPC", Color(0.38, 0.96, 0.58)],
+		["●  Sunlit Shard", Color(1.0, 0.90, 0.34)],
+		["■  Hidden Treasure Chest", Color(1.0, 0.74, 0.24)],
+		["▲  Lore Runestone", Color(0.45, 0.86, 1.0)],
+		["●  Corrupted Foe / Boss", Color(0.98, 0.34, 0.34)],
+	]:
+		var ll: Label = Label.new()
+		ll.text = String(item[0])
+		ll.add_theme_font_override("font", UI_FONT)
+		ll.add_theme_font_size_override("font_size", 13)
+		ll.add_theme_color_override("font_color", item[1])
+		leg_v.add_child(ll)
+
+	var tip: Label = Label.new()
+	tip.text = "Tip: Press [G] during exploration to launch Golden Compass fireflies toward your objective and illuminate hidden chests."
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip.add_theme_font_override("font", UI_FONT)
+	tip.add_theme_font_size_override("font_size", 12)
+	tip.add_theme_color_override("font_color", Color(0.76, 0.86, 0.84))
+	leg_v.add_child(tip)
+
+	var spacer: Control = Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	leg_v.add_child(spacer)
+
+	var close_m: Button = _make_button("Close Map [M / Esc]")
+	close_m.pressed.connect(toggle_map)
+	leg_v.add_child(close_m)
 
 
 func _build_journal_overlay() -> void:
@@ -520,15 +644,15 @@ func _build_pause_overlay() -> void:
 	card.anchor_right = 0.5
 	card.anchor_top = 0.5
 	card.anchor_bottom = 0.5
-	card.offset_left = -220.0
-	card.offset_right = 220.0
-	card.offset_top = -250.0
-	card.offset_bottom = 250.0
-	card.add_theme_stylebox_override("panel", _make_box(Color(0.04, 0.065, 0.1, 0.96), Color(0.9, 0.74, 0.34), 16, 24.0, 20.0))
+	card.offset_left = -265.0
+	card.offset_right = 265.0
+	card.offset_top = -335.0
+	card.offset_bottom = 335.0
+	card.add_theme_stylebox_override("panel", _make_box(Color(0.04, 0.065, 0.1, 0.96), Color(0.9, 0.74, 0.34), 16, 22.0, 14.0))
 	_pause_overlay.add_child(card)
 
 	var v: VBoxContainer = VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
+	v.add_theme_constant_override("separation", 6)
 	card.add_child(v)
 
 	var title: Label = Label.new()
@@ -554,6 +678,7 @@ func _build_pause_overlay() -> void:
 	var b_cp: Button = _make_button("Respawn at Wayshrine", Color(0.12, 0.24, 0.28, 0.96))
 	b_cp.pressed.connect(func() -> void:
 		_pause_overlay.visible = false
+		get_tree().paused = false
 		GameManager.respawn_at_checkpoint()
 	)
 	v.add_child(b_cp)
@@ -561,16 +686,30 @@ func _build_pause_overlay() -> void:
 	var b_restart: Button = _make_button("Restart Current Stage", Color(0.24, 0.18, 0.14, 0.96))
 	b_restart.pressed.connect(func() -> void:
 		_pause_overlay.visible = false
+		get_tree().paused = false
 		GameManager.restart_current_level()
 	)
 	v.add_child(b_restart)
 
-	# Master & SFX Volume Sliders
+	# Master, Music & SFX Volume Sliders + Quick Mute
+	var vol_hdr_row: HBoxContainer = HBoxContainer.new()
+	v.add_child(vol_hdr_row)
 	var m_lbl: Label = Label.new()
 	m_lbl.text = "Master Volume"
+	m_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	m_lbl.add_theme_font_override("font", UI_FONT)
 	m_lbl.add_theme_font_size_override("font_size", 13)
-	v.add_child(m_lbl)
+	vol_hdr_row.add_child(m_lbl)
+
+	var mute_btn: Button = _make_button("Mute Audio" if not (AudioManager and AudioManager.is_muted) else "Unmute Audio", Color(0.14, 0.2, 0.26, 0.95))
+	mute_btn.add_theme_font_size_override("font_size", 12)
+	mute_btn.pressed.connect(func() -> void:
+		if AudioManager:
+			AudioManager.set_muted(not AudioManager.is_muted)
+			mute_btn.text = "Unmute Audio" if AudioManager.is_muted else "Mute Audio"
+	)
+	vol_hdr_row.add_child(mute_btn)
+
 	var m_slider: HSlider = HSlider.new()
 	m_slider.min_value = 0.0
 	m_slider.max_value = 1.0
@@ -582,6 +721,22 @@ func _build_pause_overlay() -> void:
 	)
 	v.add_child(m_slider)
 
+	var mus_lbl: Label = Label.new()
+	mus_lbl.text = "Forest Music Volume"
+	mus_lbl.add_theme_font_override("font", UI_FONT)
+	mus_lbl.add_theme_font_size_override("font_size", 13)
+	v.add_child(mus_lbl)
+	var mus_slider: HSlider = HSlider.new()
+	mus_slider.min_value = 0.0
+	mus_slider.max_value = 1.0
+	mus_slider.step = 0.05
+	mus_slider.value = AudioManager.music_volume if AudioManager else 0.72
+	mus_slider.value_changed.connect(func(val: float) -> void:
+		if AudioManager:
+			AudioManager.set_music_volume(val)
+	)
+	v.add_child(mus_slider)
+
 	var s_lbl: Label = Label.new()
 	s_lbl.text = "SFX Volume"
 	s_lbl.add_theme_font_override("font", UI_FONT)
@@ -591,16 +746,39 @@ func _build_pause_overlay() -> void:
 	s_slider.min_value = 0.0
 	s_slider.max_value = 1.0
 	s_slider.step = 0.05
-	s_slider.value = AudioManager.sfx_volume if AudioManager else 0.9
+	s_slider.value = AudioManager.sfx_volume if AudioManager else 0.85
 	s_slider.value_changed.connect(func(val: float) -> void:
 		if AudioManager:
 			AudioManager.set_sfx_volume(val)
 	)
 	v.add_child(s_slider)
 
+	var tr_lbl: Label = Label.new()
+	tr_lbl.text = "Travel to Realm (Stages 1-4)"
+	tr_lbl.add_theme_font_override("font", UI_FONT)
+	tr_lbl.add_theme_font_size_override("font_size", 13)
+	tr_lbl.add_theme_color_override("font_color", Color(0.62, 0.94, 0.86))
+	v.add_child(tr_lbl)
+
+	var st_row: HBoxContainer = HBoxContainer.new()
+	st_row.add_theme_constant_override("separation", 6)
+	v.add_child(st_row)
+	for s_idx in 4:
+		var sb_btn: Button = _make_button("Stage %d" % (s_idx + 1), Color(0.1, 0.24, 0.28, 0.96))
+		sb_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sb_btn.add_theme_font_size_override("font_size", 13)
+		var target_i: int = s_idx
+		sb_btn.pressed.connect(func() -> void:
+			_pause_overlay.visible = false
+			get_tree().paused = false
+			GameManager.load_stage(target_i)
+		)
+		st_row.add_child(sb_btn)
+
 	var b_menu: Button = _make_button("Return to Main Menu", Color(0.26, 0.12, 0.14, 0.96))
 	b_menu.pressed.connect(func() -> void:
 		_pause_overlay.visible = false
+		get_tree().paused = false
 		GameManager.go_to_main_menu()
 	)
 	v.add_child(b_menu)
@@ -739,7 +917,10 @@ func _connect_signals() -> void:
 	GameManager.shards_changed.connect(_on_shards_changed)
 	GameManager.score_changed.connect(_on_score_changed)
 	GameManager.dash_cooldown_changed.connect(func(r: float) -> void: _dash_bar.value = r)
-	GameManager.compass_pulse_cooldown_changed.connect(func(r: float) -> void: _compass_cd_bar.value = r)
+	GameManager.compass_pulse_cooldown_changed.connect(func(r: float) -> void:
+		_last_compass_cd = r
+		_compass_cd_bar.value = r
+	)
 	GameManager.compass_updated.connect(_on_compass_updated)
 	GameManager.interact_prompt_changed.connect(_on_interact_prompt)
 	GameManager.boss_health_changed.connect(_on_boss_health)
@@ -768,20 +949,49 @@ func _unhandled_input(event: InputEvent) -> void:
 	if GameManager.is_game_ended:
 		return
 	if event.is_action_pressed("pause"):
-		if GameManager.is_journal_open:
+		if _is_map_open:
+			toggle_map()
+		elif GameManager.is_journal_open:
 			toggle_journal()
 		elif not GameManager.is_dialogue_open:
 			toggle_pause()
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("toggle_map"):
+		if not get_tree().paused and not GameManager.is_dialogue_open:
+			toggle_map()
+			get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("quest_journal"):
 		if not get_tree().paused and not GameManager.is_dialogue_open:
 			toggle_journal()
 			get_viewport().set_input_as_handled()
 
 
+func toggle_map() -> void:
+	if GameManager.is_game_ended:
+		return
+	if GameManager.is_journal_open:
+		toggle_journal()
+	_is_map_open = not _is_map_open
+	if _map_overlay:
+		_map_overlay.visible = _is_map_open
+	if _is_map_open:
+		var idx: int = clampi(GameManager.current_stage_index, 0, GameManager.STAGE_NAMES.size() - 1)
+		if _map_title_lbl:
+			_map_title_lbl.text = "REALM MAP — " + GameManager.STAGE_NAMES[idx].to_upper()
+		if _map_obj_lbl and _compass_target_lbl and _compass_dist_lbl:
+			_map_obj_lbl.text = "Active Compass Target: %s  (%s)" % [_compass_target_lbl.text, _compass_dist_lbl.text]
+		GameManager.set_ui_mouse()
+		if AudioManager:
+			AudioManager.play_sfx("ui_click")
+	else:
+		GameManager.set_gameplay_mouse()
+
+
 func toggle_pause() -> void:
 	if GameManager.is_game_ended:
 		return
+	if _is_map_open:
+		toggle_map()
 	var will_pause: bool = not get_tree().paused
 	get_tree().paused = will_pause
 	_pause_overlay.visible = will_pause
@@ -794,6 +1004,8 @@ func toggle_pause() -> void:
 func toggle_journal() -> void:
 	if GameManager.is_game_ended:
 		return
+	if _is_map_open:
+		toggle_map()
 	var open_now: bool = not GameManager.is_journal_open
 	GameManager.is_journal_open = open_now
 	_journal_overlay.visible = open_now
@@ -816,6 +1028,17 @@ func show_level_banner(title_text: String, _show_hint: bool = true) -> void:
 	tw.tween_interval(2.4)
 	tw.tween_property(_stage_banner, "modulate:a", 0.0, 0.75)
 	tw.tween_callback(func() -> void: _stage_banner.visible = false)
+
+
+func fade_to_black(duration: float = 0.35) -> void:
+	var fade: ColorRect = ColorRect.new()
+	fade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	fade.color = Color(0.01, 0.02, 0.03, 0.0)
+	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(fade)
+	var tw: Tween = create_tween()
+	tw.tween_property(fade, "color:a", 1.0, maxf(duration, 0.1))
+	await tw.finished
 
 
 func flash_damage_vignette() -> void:
@@ -853,11 +1076,27 @@ func _on_score_changed(sc: int) -> void:
 	_score_lbl.text = "Score: %d" % sc
 
 
+func _cardinal_from_angle(world_angle: float) -> String:
+	var dirs: Array[String] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+	var norm: float = fposmod(world_angle + PI / 8.0, TAU)
+	var idx: int = int(floor(norm / (TAU / 8.0))) % 8
+	return dirs[idx]
+
+
 func _on_compass_updated(rel_angle: float, dist_m: float, label: String) -> void:
+	var cam_heading: float = 0.0
+	var player: Node3D = get_tree().get_first_node_in_group("player") as Node3D
+	if player and is_instance_valid(player):
+		var cy: Node3D = player.get_node_or_null("CameraYaw") as Node3D
+		if cy:
+			cam_heading = -cy.rotation.y
+	var world_bearing: String = _cardinal_from_angle(rel_angle + cam_heading)
 	_compass_target_lbl.text = label
-	_compass_dist_lbl.text = "%d m" % maxi(int(round(dist_m)), 1)
-	if _compass_arrow_pivot:
-		_compass_arrow_pivot.rotation = rel_angle
+	_compass_dist_lbl.text = "%s • %d m" % [world_bearing, maxi(int(round(dist_m)), 1)]
+	if _compass_dial and _compass_dial.has_method("set_compass_state"):
+		_compass_dial.set_compass_state(rel_angle, cam_heading, _last_compass_cd)
+	if _is_map_open and _map_obj_lbl:
+		_map_obj_lbl.text = "Active Compass Target: %s  (%s)" % [label, _compass_dist_lbl.text]
 
 
 func _on_interact_prompt(vis: bool, text_str: String) -> void:
@@ -1005,12 +1244,18 @@ func _add_journal_card(q: Dictionary, is_done: bool) -> void:
 
 
 func _on_game_over() -> void:
+	_is_map_open = false
+	if _map_overlay:
+		_map_overlay.visible = false
 	_pause_overlay.visible = false
 	_journal_overlay.visible = false
 	_gameover_overlay.visible = true
 
 
 func _on_victory() -> void:
+	_is_map_open = false
+	if _map_overlay:
+		_map_overlay.visible = false
 	_pause_overlay.visible = false
 	_journal_overlay.visible = false
 	var mins: int = int(GameManager.elapsed_time) / 60

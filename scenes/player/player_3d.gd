@@ -242,7 +242,7 @@ func _physics_process(delta: float) -> void:
 	if on_floor_now:
 		if not _was_on_floor and velocity.y < -4.0:
 			if AudioManager:
-				AudioManager.play_sfx("jump", 0.8, -5.0)
+				AudioManager.play_sfx("land", 0.9, 1.05, -5.0)
 			if footstep_dust:
 				footstep_dust.restart()
 				footstep_dust.emitting = true
@@ -261,7 +261,7 @@ func _physics_process(delta: float) -> void:
 				coyote_timer = 0.0
 				jump_buffer_timer = 0.0
 				if AudioManager:
-					AudioManager.play_sfx("jump", 1.02)
+					AudioManager.play_sfx("jump", 0.98, 1.06, -3.0)
 				if footstep_dust:
 					footstep_dust.restart()
 					footstep_dust.emitting = true
@@ -270,7 +270,7 @@ func _physics_process(delta: float) -> void:
 				velocity.y = double_jump_velocity
 				jump_buffer_timer = 0.0
 				if AudioManager:
-					AudioManager.play_sfx("jump", 1.24)
+					AudioManager.play_sfx("double_jump", 1.0, 1.1, -3.0)
 				_spawn_ring_burst(global_position + Vector3(0.0, 0.25, 0.0), Color(1.0, 0.88, 0.42), 1.4, 0.28)
 
 	# Gravity
@@ -279,7 +279,7 @@ func _physics_process(delta: float) -> void:
 		velocity.y = maxf(velocity.y - gravity_value * g_mult * delta, -max_fall_speed)
 
 	# Directional Movement relative to CameraYaw
-	var move_input: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
+	var move_input: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var cam_fwd: Vector3 = -cam_yaw.global_transform.basis.z
 	cam_fwd.y = 0.0
 	cam_fwd = cam_fwd.normalized() if cam_fwd.length_squared() > 0.001 else Vector3.FORWARD
@@ -314,14 +314,14 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 
-	# Footstep cadence
+	# Footstep cadence (soft, quiet acoustic moss steps)
 	var horiz_speed: float = Vector2(velocity.x, velocity.z).length()
-	if is_on_floor() and horiz_speed > 1.8 and not is_dashing:
+	if is_on_floor() and horiz_speed > 2.0 and not is_dashing:
 		_step_dist_accum += horiz_speed * delta
-		if _step_dist_accum >= 2.35:
+		if _step_dist_accum >= 3.05:
 			_step_dist_accum = 0.0
 			if AudioManager:
-				AudioManager.play_sfx("footstep", randf_range(0.92, 1.12), -9.0)
+				AudioManager.play_sfx("footstep", 0.92, 1.08, -17.5)
 
 	# Buffered combo follow-up
 	if not is_attacking and _attack_buffer_timer > 0.0:
@@ -459,13 +459,11 @@ func _on_attack_hit(body: Node3D) -> void:
 		return
 	if body.has_method("take_damage"):
 		_hit_this_swing.append(body)
-		var dir: Vector3 = (body.global_position - global_position)
-		dir.y = 0.0
-		dir = dir.normalized() if dir.length_squared() > 0.001 else -visual_rig.global_transform.basis.z
-		body.take_damage(_swing_damage, dir * (11.0 if _combo_step == 3 else 7.5))
+		body.take_damage(_swing_damage, global_position)
 		GameManager.modify_compass_energy(12.0)
 		if AudioManager:
-			AudioManager.play_sfx("hit_impact", 1.1 if _combo_step == 3 else 1.0)
+			var p_hi: float = 1.14 if _combo_step == 3 else 1.04
+			AudioManager.play_sfx("hit_enemy", 0.96, p_hi, -2.0)
 		if hit_sparks:
 			hit_sparks.restart()
 			hit_sparks.emitting = true
@@ -486,9 +484,9 @@ func _trigger_golden_arc() -> void:
 	fwd = fwd.normalized() if fwd.length_squared() > 0.001 else -visual_rig.global_transform.basis.z
 	visual_rig.rotation.y = atan2(-fwd.x, -fwd.z)
 
-	var proj: Area3D = Area3D.new()
+	var proj: Node3D = Node3D.new()
 	proj.set_script(GOLDEN_ARC_SCRIPT)
-	proj.set("direction", fwd)
+	proj.set("move_dir", fwd)
 	proj.set("damage", int(round(float(GameManager.attack_damage) * 1.45)))
 	proj.global_position = global_position + Vector3(0.0, 1.25, 0.0) + fwd * 1.15
 	get_tree().current_scene.add_child(proj)
@@ -501,7 +499,7 @@ func _trigger_golden_arc() -> void:
 func _try_dash() -> void:
 	if is_dashing or _dash_cooldown > 0.0:
 		return
-	var move_input: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
+	var move_input: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var cam_fwd: Vector3 = -cam_yaw.global_transform.basis.z
 	cam_fwd.y = 0.0
 	cam_fwd = cam_fwd.normalized() if cam_fwd.length_squared() > 0.001 else Vector3.FORWARD
@@ -552,7 +550,7 @@ func _update_interact_scanner(delta: float, force_hide: bool) -> void:
 	_interact_scan_accum = 0.0
 
 	var best: Node3D = null
-	var best_d: float = 3.7 * 3.7
+	var best_d: float = 4.6 * 4.6
 	for n_var in get_tree().get_nodes_in_group("interactable"):
 		var n: Node3D = n_var as Node3D
 		if not n or not is_instance_valid(n) or not n.is_inside_tree():
@@ -732,7 +730,7 @@ func _spawn_ring_burst(center: Vector3, col: Color, max_radius: float, duration:
 # ==============================================================================
 # DAMAGE, HITSTOP, SHAKE & FALL FAILSAFE
 # ==============================================================================
-func take_damage(amount: int, knockback: Vector3 = Vector3.ZERO) -> void:
+func take_damage(amount: int, source_pos: Vector3 = Vector3.ZERO) -> void:
 	if is_invincible or GameManager.is_game_ended or GameManager.is_transitioning:
 		return
 	is_invincible = true
@@ -741,9 +739,12 @@ func take_damage(amount: int, knockback: Vector3 = Vector3.ZERO) -> void:
 		AudioManager.play_sfx("player_hurt")
 	_camera_shake(0.24, 0.22)
 
-	if knockback.length_squared() > 0.01:
-		velocity.x = knockback.x
-		velocity.z = knockback.z
+	var away: Vector3 = global_position - source_pos
+	away.y = 0.0
+	if away.length_squared() > 0.01:
+		away = away.normalized() * 8.5
+		velocity.x = away.x
+		velocity.z = away.z
 		velocity.y = maxf(velocity.y, 4.8)
 
 	var hud: Node = get_tree().get_first_node_in_group("hud")

@@ -33,16 +33,17 @@ func _build_visuals() -> void:
 		add_child(col)
 
 	_grate_mat = StandardMaterial3D.new()
-	_grate_mat.albedo_color = Color(0.24, 0.22, 0.26, 1.0)
+	_grate_mat.albedo_color = Color(0.16, 0.17, 0.22, 1.0)
+	_grate_mat.roughness = 0.86
 	_grate_mat.emission_enabled = true
-	_grate_mat.emission = Color(0.9, 0.35, 0.15, 1.0)
-	_grate_mat.emission_energy_multiplier = 0.3
+	_grate_mat.emission = Color(0.68, 0.26, 0.14, 1.0)
+	_grate_mat.emission_energy_multiplier = 0.18
 
 	var pad := MeshInstance3D.new()
 	var pm := BoxMesh.new()
-	pm.size = Vector3(2.6, 0.16, 2.6)
+	pm.size = Vector3(2.5, 0.95, 2.5)
 	pad.mesh = pm
-	pad.position = Vector3(0.0, 0.08, 0.0)
+	pad.position = Vector3(0.0, -0.36, 0.0)
 	pad.material_override = _grate_mat
 	add_child(pad)
 
@@ -50,21 +51,23 @@ func _build_visuals() -> void:
 	add_child(_spikes_pivot)
 
 	var thorn_mat := StandardMaterial3D.new()
-	thorn_mat.albedo_color = Color(0.32, 0.16, 0.28, 1.0)
+	thorn_mat.albedo_color = Color(0.24, 0.19, 0.28, 1.0)
+	thorn_mat.metallic = 0.45
+	thorn_mat.roughness = 0.48
 	thorn_mat.emission_enabled = true
-	thorn_mat.emission = Color(0.85, 0.22, 0.38, 1.0)
-	thorn_mat.emission_energy_multiplier = 1.2
+	thorn_mat.emission = Color(0.62, 0.16, 0.22, 1.0)
+	thorn_mat.emission_energy_multiplier = 0.55
 
-	for ix in [-0.75, 0.0, 0.75]:
-		for iz in [-0.75, 0.0, 0.75]:
+	for ix in [-0.72, 0.0, 0.72]:
+		for iz in [-0.72, 0.0, 0.72]:
 			var th := MeshInstance3D.new()
 			var tm := CylinderMesh.new()
-			tm.top_radius = 0.02
-			tm.bottom_radius = 0.16
-			tm.height = 1.25
+			tm.top_radius = 0.018
+			tm.bottom_radius = 0.14
+			tm.height = 1.15
 			tm.radial_segments = 6
 			th.mesh = tm
-			th.position = Vector3(ix, 0.62, iz)
+			th.position = Vector3(ix, 0.54, iz)
 			th.material_override = thorn_mat
 			_spikes_pivot.add_child(th)
 

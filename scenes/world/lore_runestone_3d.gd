@@ -3,7 +3,7 @@ extends Node3D
 ## Press [E] nearby to decipher hidden lore and progress the Side Quest.
 
 @export var rune_title: String = "Ancient Lore Runestone"
-@export var lore_lines: Array[String] = [
+@export var lore_lines: Array = [
 	"Inscription I: Three Rune Pillars anchor the ancient seal of Thornhollow.",
 	"When all three blaze in harmony, the Sanctum of the Grove shall open once more."
 ]

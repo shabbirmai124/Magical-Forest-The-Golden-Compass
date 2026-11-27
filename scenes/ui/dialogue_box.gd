@@ -143,7 +143,7 @@ func _process(delta: float) -> void:
 	if _tick_accum >= 0.075:
 		_tick_accum = 0.0
 		if AudioManager:
-			AudioManager.play_sfx("dialogue_tick", randf_range(0.94, 1.08), -12.0)
+			AudioManager.play_sfx("dialogue_blip", 0.94, 1.08, -12.0)
 	if count >= _full_text.length():
 		_is_typing = false
 

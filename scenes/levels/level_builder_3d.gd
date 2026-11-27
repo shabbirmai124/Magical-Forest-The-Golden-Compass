@@ -225,6 +225,22 @@ func get_compass_target_info() -> Dictionary:
 	return {"pos": ppos + Vector3(0.0, 0.0, -40.0), "label": "Objective"}
 
 
+func _make_terrain_detail_texture() -> ImageTexture:
+	var sz: int = 64
+	var img: Image = Image.create(sz, sz, false, Image.FORMAT_RGB8)
+	for y in sz:
+		for x in sz:
+			var fx: float = float(x) / float(sz) * TAU
+			var fy: float = float(y) / float(sz) * TAU
+			# Tileable multi-octave organic moss & pebble grain around neutral 0.94 brightness
+			var n1: float = sin(fx * 2.0 + cos(fy * 2.0)) * 0.5
+			var n2: float = cos(fx * 5.0 - fy * 4.0) * 0.3
+			var n3: float = sin(fx * 9.0 + fy * 7.0) * 0.2
+			var v: float = clampf(0.92 + (n1 + n2 + n3) * 0.085, 0.78, 1.0)
+			img.set_pixel(x, y, Color(v, v * 1.01, v * 0.99, 1.0))
+	return ImageTexture.create_from_image(img)
+
+
 func _build_sculpted_terrain(half_size: float, step: float, moss_col: Color, path_col: Color, cliff_col: Color) -> void:
 	## Builds a watertight, vertex-colored 220m x 220m heightmap mesh with exact StaticBody3D trimesh collision.
 	var n: int = int(round((half_size * 2.0) / step))
@@ -297,7 +313,9 @@ func _build_sculpted_terrain(half_size: float, step: float, moss_col: Color, pat
 
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
-	mat.roughness = 0.92
+	mat.albedo_texture = _make_terrain_detail_texture()
+	mat.uv1_scale = Vector3(4.5, 4.5, 1.0)
+	mat.roughness = 0.93
 	mat.metallic = 0.02
 
 	var tbody := StaticBody3D.new()

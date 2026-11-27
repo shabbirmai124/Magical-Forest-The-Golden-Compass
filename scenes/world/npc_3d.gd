@@ -9,8 +9,8 @@ extends Node3D
 @export var side_quest_id: String = ""
 @export var robe_color: Color = Color(0.14, 0.34, 0.24, 1.0)
 @export var accent_color: Color = Color(0.95, 0.78, 0.32, 1.0)
-@export var dialogue_lines: Array[String] = []
-@export var repeat_lines: Array[String] = []
+@export var dialogue_lines: Array = []
+@export var repeat_lines: Array = []
 @export var heals_on_talk: bool = false
 
 var compass_label: String = "Elder Sylvan"

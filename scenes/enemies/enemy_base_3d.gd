@@ -263,7 +263,7 @@ func _die() -> void:
 	if drops_shard and get_parent():
 		var drop := Node3D.new()
 		drop.set_script(SHARD_SCRIPT)
-		drop.set("counts_for_quest", false)
+		drop.set("counts_for_quest", true)
 		drop.set("score_value", 40)
 		get_parent().add_child(drop)
 		drop.global_position = global_position + Vector3(0.0, 1.0, 0.0)

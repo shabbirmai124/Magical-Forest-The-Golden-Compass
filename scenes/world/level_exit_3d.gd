@@ -160,11 +160,23 @@ func _process(delta: float) -> void:
 		var pulse: float = 1.0 + sin(_t * 3.8) * 0.04
 		_vortex_mesh.scale = Vector3(pulse, 1.0, pulse)
 
+	# Auto-unseal safeguard in case all stage quest steps completed
+	if not _is_active and QuestManager and QuestManager.is_stage_portal_ready(QuestManager.active_stage):
+		awaken_portal()
+
+	# Allow walking directly through the open swirling vortex to travel to the next realm!
+	if _is_active and not _triggered:
+		var player: Node3D = get_tree().get_first_node_in_group("player") as Node3D
+		if player and is_instance_valid(player):
+			var d: float = Vector2(player.global_position.x - global_position.x, player.global_position.z - global_position.z).length()
+			if d < 2.25 and absf(player.global_position.y - global_position.y) < 3.5:
+				interact(player)
+
 
 func get_interact_prompt() -> String:
 	if not _is_active:
 		return "LOCKED — Complete Main Quest to unseal %s" % portal_name
-	return "[E] Enter %s -> %s" % [portal_name, next_stage_label]
+	return "[E] or Walk Into %s -> %s" % [portal_name, next_stage_label]
 
 
 func interact(_player: Node3D) -> void:

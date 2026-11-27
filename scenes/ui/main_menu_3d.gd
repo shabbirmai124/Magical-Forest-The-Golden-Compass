@@ -26,8 +26,8 @@ func _ready() -> void:
 	GameManager.set_ui_mouse()
 	get_tree().paused = false
 	_configure_env()
-	_build_3d_clearing()
 	_build_menu_ui()
+	_build_3d_clearing()
 
 
 func _configure_env() -> void:
@@ -143,16 +143,18 @@ func _build_3d_clearing() -> void:
 	_relic_root.add_child(relic_light)
 
 	# Campfire, Stone Archway, Lanterns, Mushrooms & MultiMesh Forest Ring
-	Props3D.spawn_campfire(world, Vector3(3.6, 0.0, 3.2))
-	Props3D.spawn_stone_archway(world, Vector3(0.0, 0.0, -7.8), 0.0)
-	Props3D.spawn_lantern_post(world, Vector3(-4.5, 0.0, 3.8), true)
-	Props3D.spawn_lantern_post(world, Vector3(4.5, 0.0, -4.2), false)
-	for m_pos in [Vector3(-3.2, 0.0, 1.5), Vector3(3.0, 0.0, -2.5), Vector3(-5.8, 0.0, -3.0), Vector3(5.6, 0.0, 1.2)]:
-		Props3D.spawn_glowing_mushroom(world, m_pos, 1.1)
+	Props3D.spawn_campfire(world, Vector3(3.6, 0.0, 3.2), true)
+	Props3D.spawn_stone_archway(world, Vector3(0.0, 0.0, -7.8), 9.0, 6.2, 0.0)
+	Props3D.spawn_lantern_post(world, Vector3(-4.5, 0.0, 3.8), 0.35, true)
+	Props3D.spawn_lantern_post(world, Vector3(4.5, 0.0, -4.2), PI - 0.35, false)
 
-	var pine_xfs: Array[Transform3D] = []
-	var oak_xfs: Array[Transform3D] = []
-	var rock_xfs: Array[Transform3D] = []
+	var mush_xfs: Array = []
+	for m_pos in [Vector3(-3.2, 0.0, 1.5), Vector3(3.0, 0.0, -2.5), Vector3(-5.8, 0.0, -3.0), Vector3(5.6, 0.0, 1.2)]:
+		mush_xfs.append(Transform3D(Basis.IDENTITY.scaled(Vector3(1.15, 1.15, 1.15)), m_pos))
+
+	var pine_xfs: Array = []
+	var oak_xfs: Array = []
+	var rock_xfs: Array = []
 	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 	rng.seed = 2026
 	for i in 52:
@@ -171,9 +173,18 @@ func _build_3d_clearing() -> void:
 		var sc2: float = rng.randf_range(0.6, 1.5)
 		rock_xfs.append(Transform3D(Basis(Vector3.UP, rng.randf_range(0.0, TAU)).scaled(Vector3(sc2, sc2 * 0.75, sc2)), Vector3(cos(a2) * d2, 0.0, sin(a2) * d2)))
 
-	Props3D.add_multimesh_pines(world, pine_xfs, Color(0.14, 0.36, 0.24))
-	Props3D.add_multimesh_oaks(world, oak_xfs, Color(0.2, 0.44, 0.28))
-	Props3D.add_multimesh_rocks(world, rock_xfs, Color(0.32, 0.38, 0.42))
+	var bark_mat: StandardMaterial3D = Props3D.make_mat(Color(0.24, 0.16, 0.11, 1.0), 0.92)
+	var pine_mat: StandardMaterial3D = Props3D.make_mat(Color(0.14, 0.36, 0.24, 1.0), 0.85)
+	var oak_mat: StandardMaterial3D = Props3D.make_mat(Color(0.2, 0.44, 0.28, 1.0), 0.85)
+	var rock_mat: StandardMaterial3D = Props3D.make_mat(Color(0.32, 0.38, 0.42, 1.0), 0.9)
+	var mush_mat: StandardMaterial3D = Props3D.make_mat(Color(0.28, 0.95, 0.84, 1.0), 0.28, 0.0, Color(0.24, 0.92, 0.82, 1.0), 2.4)
+
+	Props3D.spawn_multimesh(world, pine_xfs, Props3D.build_pine_trunk_mesh(), bark_mat)
+	Props3D.spawn_multimesh(world, pine_xfs, Props3D.build_pine_canopy_mesh(), pine_mat)
+	Props3D.spawn_multimesh(world, oak_xfs, Props3D.build_oak_trunk_mesh(), bark_mat)
+	Props3D.spawn_multimesh(world, oak_xfs, Props3D.build_oak_canopy_mesh(), oak_mat)
+	Props3D.spawn_multimesh(world, rock_xfs, Props3D.build_rock_mesh(), rock_mat)
+	Props3D.spawn_multimesh(world, mush_xfs, Props3D.build_mushroom_cluster_mesh(), mush_mat)
 
 	# Floating golden firefly motes
 	var fmat: StandardMaterial3D = StandardMaterial3D.new()
